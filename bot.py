@@ -11,13 +11,13 @@ API_TOKEN = "8948074959:AAGIqYYLk0UeD7KUmWbRKqgdYs1n44dRjmo"
 SUPPORT_USERNAME = "@r1ivlk"
 REQUIRED_CHANNEL = "@r1iv_k"  # يوزر قناتك للاشتراك الإجباري
 
-# عدد النقاط: السعر بنجوم تيليجرام
+# باقات شراء النقاط بالنجوم (أسعار جديدة ورخيصة ومشجعة)
 POINT_PACKAGES = {
-    2: 15,
-    5: 35,
-    10: 65,
-    15: 90,
-    30: 165,
+    2: 5,
+    5: 10,
+    10: 18,
+    15: 25,
+    30: 45,
 }
 
 logging.basicConfig(level=logging.INFO)
@@ -81,7 +81,7 @@ texts = {
         "btn_info": "👤 معلومات حسابك",
         "btn_redeem": "🎁 استبدال النقاط (سحب حساب)",
         "btn_buy_points": "⭐ شراء نقاط بنجوم تيليجرام",
-        "buy_points_title": "⭐ **شراء النقاط:**\n\nاختر الباقة المناسبة، وبعد تأكيد الدفع ستُضاف النقاط تلقائياً إلى رصيدك.",
+        "buy_points_title": "⭐ **شراء النقاط:**\n\nاختر الباقة المناسبة بأسعارها الجديدة والرخيصة، وبعد تأكيد الدفع ستُضاف النقاط تلقائياً إلى رصيدك.",
         "btn_my_purchases": "📁 حساباتي المشراة",
         "btn_lang": "🌐 تغيير اللغة / Change Language",
         "account_info": "👤 **معلومات حسابك:**\n\n🆔 رقم المستخدم: `{}`\n💎 النقاط: `{}` نقطة\n\n🔗 رابط الدعوة الخاص بك:\n`{}`\n*(ستحصل على **1 نقطة** فوراً مقابل كل صديق جديد ينضم عبر رابطك!)*",
@@ -106,7 +106,7 @@ texts = {
         "btn_info": "👤 Account Info",
         "btn_redeem": "🎁 Redeem Points",
         "btn_buy_points": "⭐ Buy Points with Telegram Stars",
-        "buy_points_title": "⭐ **Buy Points:**\n\nChoose a package. Your points will be added automatically after Telegram confirms the payment.",
+        "buy_points_title": "⭐ **Buy Points:**\n\nChoose a package with new affordable prices. Points will be added automatically after payment.",
         "btn_my_purchases": "📁 My Purchased Accounts",
         "btn_lang": "🌐 تغيير اللغة / Change Language",
         "account_info": "👤 **Account Info:**\n\n🆔 User ID: `{}`\n💎 Points: `{}` pts\n\n🔗 Your Referral Link:\n`{}`\n*(You will get **1 point** instantly for every new friend who joins via your link!)*",
@@ -158,7 +158,6 @@ def get_main_keyboard(lang):
 async def cmd_start(message: types.Message):
     user_id = message.from_user.id
     
-    # فحص الاشتراك الإجباري أولاً
     if not await check_subscription(user_id):
         lang = get_lang(user_id)
         t = texts[lang]
@@ -183,9 +182,9 @@ async def cmd_start(message: types.Message):
                 cursor.execute("SELECT user_id FROM users WHERE user_id = ?", (ref_id,))
                 if cursor.fetchone():
                     referred_by = ref_id
+                    # منح نقطة حقيقية لصاحب الدعوة
                     cursor.execute("UPDATE users SET points = points + 1 WHERE user_id = ?", (ref_id,))
                     
-                    # --- إرسال إشعار لصاحب الرابط بلغته ---
                     cursor.execute("SELECT lang, points FROM users WHERE user_id = ?", (ref_id,))
                     ref_data = cursor.fetchone()
                     if ref_data:
@@ -199,7 +198,6 @@ async def cmd_start(message: types.Message):
                             await bot.send_message(chat_id=ref_id, text=notif_text)
                         except Exception as e:
                             logging.error(f"Failed to send referral notification: {e}")
-                    # ------------------------------------
 
         cursor.execute("INSERT INTO users (user_id, points, referred_by, lang) VALUES (?, 0, ?, 'ar')", (user_id, referred_by))
         conn.commit()
@@ -338,9 +336,9 @@ async def buy_points_menu(callback: types.CallbackQuery):
     builder = InlineKeyboardBuilder()
     for points, stars in POINT_PACKAGES.items():
         if lang == "ar":
-            button_text = f"💎 {points} نقطة — ⭐ {stars}"
+            button_text = f"💎 {points} نقطة — ⭐ {stars} نجوم"
         else:
-            button_text = f"💎 {points} points — ⭐ {stars}"
+            button_text = f"💎 {points} points — ⭐ {stars} Stars"
 
         builder.row(
             InlineKeyboardButton(
@@ -599,27 +597,28 @@ async def redeem_menu(callback: types.CallbackQuery):
     lang = get_lang(user_id)
     t = texts[lang]
 
+    # الأسعار الجديدة والمتوسطة للاستبدال
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="🔥 Resident Evil 4 Remake + 30 AAA Games (30 pts)", callback_data="redeem_re4remake"))
-    builder.row(InlineKeyboardButton(text="🪓 God of War (2018) + Ragnarok (20 pts)", callback_data="redeem_godofwar"))
-    builder.row(InlineKeyboardButton(text="🤖 Cyberpunk 2077 (20 pts)", callback_data="redeem_cyberpunk"))
-    builder.row(InlineKeyboardButton(text="🧟 Resident Evil Requiem (15 pts)", callback_data="redeem_requiem"))
-    builder.row(InlineKeyboardButton(text="🤠 Red Dead Redemption 2 (10 pts)", callback_data="redeem_rdr2"))
-    builder.row(InlineKeyboardButton(text="⚽ FC 26 / FIFA 26 (10 pts)", callback_data="redeem_fifa26"))
-    builder.row(InlineKeyboardButton(text="🌿 The Last of Us Part I & II (10 pts)", callback_data="redeem_thelastofus"))
-    builder.row(InlineKeyboardButton(text="🕷️ Spider-Man Remastered (10 pts)", callback_data="redeem_spiderman1"))
-    builder.row(InlineKeyboardButton(text="🕷️ Spider-Man: Miles Morales (10 pts)", callback_data="redeem_miles"))
-    builder.row(InlineKeyboardButton(text="🕷️ Spider-Man 2 (10 pts)", callback_data="redeem_spiderman2"))
-    builder.row(InlineKeyboardButton(text="🏎️ Forza Horizon 6 (10 pts)", callback_data="redeem_forza"))
-    builder.row(InlineKeyboardButton(text="🗡️ Ghost of Tsushima (Gold Edition) (10 pts)", callback_data="redeem_tsushima"))
-    builder.row(InlineKeyboardButton(text="🦇 Batman Arkham Trilogy (10 pts)", callback_data="redeem_batman"))
-    builder.row(InlineKeyboardButton(text="🌀 Naruto Shippuden: Ultimate Ninja Storm (10 pts)", callback_data="redeem_naruto"))
-    builder.row(InlineKeyboardButton(text="🐀 A Plague Tale: Innocence (Part 1) (10 pts)", callback_data="redeem_plague1"))
-    builder.row(InlineKeyboardButton(text="🐀 A Plague Tale: Requiem (Part 2) (10 pts)", callback_data="redeem_plague2"))
-    builder.row(InlineKeyboardButton(text="🏎️ GTA V Account (8 pts)", callback_data="redeem_gta"))
-    builder.row(InlineKeyboardButton(text="💻 Watch Dogs (5 pts)", callback_data="redeem_watchdogs"))
-    builder.row(InlineKeyboardButton(text="🍿 Netflix Account (3 pts)", callback_data="redeem_netflix"))
-    builder.row(InlineKeyboardButton(text="🎮 حساب ستيم عشوائي (2 pts)", callback_data="redeem_steam"))
+    builder.row(InlineKeyboardButton(text="🔥 Resident Evil 4 Remake + 30 AAA Games (18 pts)", callback_data="redeem_re4remake"))
+    builder.row(InlineKeyboardButton(text="🪓 God of War (2018) + Ragnarok (12 pts)", callback_data="redeem_godofwar"))
+    builder.row(InlineKeyboardButton(text="🤖 Cyberpunk 2077 (12 pts)", callback_data="redeem_cyberpunk"))
+    builder.row(InlineKeyboardButton(text="🧟 Resident Evil Requiem (10 pts)", callback_data="redeem_requiem"))
+    builder.row(InlineKeyboardButton(text="🤠 Red Dead Redemption 2 (6 pts)", callback_data="redeem_rdr2"))
+    builder.row(InlineKeyboardButton(text="⚽ FC 26 / FIFA 26 (6 pts)", callback_data="redeem_fifa26"))
+    builder.row(InlineKeyboardButton(text="🌿 The Last of Us Part I & II (6 pts)", callback_data="redeem_thelastofus"))
+    builder.row(InlineKeyboardButton(text="🕷️ Spider-Man Remastered (6 pts)", callback_data="redeem_spiderman1"))
+    builder.row(InlineKeyboardButton(text="🕷️ Spider-Man: Miles Morales (6 pts)", callback_data="redeem_miles"))
+    builder.row(InlineKeyboardButton(text="🕷️ Spider-Man 2 (6 pts)", callback_data="redeem_spiderman2"))
+    builder.row(InlineKeyboardButton(text="🏎️ Forza Horizon 6 (6 pts)", callback_data="redeem_forza"))
+    builder.row(InlineKeyboardButton(text="🗡️ Ghost of Tsushima (Gold Edition) (6 pts)", callback_data="redeem_tsushima"))
+    builder.row(InlineKeyboardButton(text="🦇 Batman Arkham Trilogy (6 pts)", callback_data="redeem_batman"))
+    builder.row(InlineKeyboardButton(text="🌀 Naruto Shippuden: Ultimate Ninja Storm (6 pts)", callback_data="redeem_naruto"))
+    builder.row(InlineKeyboardButton(text="🐀 A Plague Tale: Innocence (Part 1) (6 pts)", callback_data="redeem_plague1"))
+    builder.row(InlineKeyboardButton(text="🐀 A Plague Tale: Requiem (Part 2) (6 pts)", callback_data="redeem_plague2"))
+    builder.row(InlineKeyboardButton(text="🏎️ GTA V Account (4 pts)", callback_data="redeem_gta"))
+    builder.row(InlineKeyboardButton(text="💻 Watch Dogs (3 pts)", callback_data="redeem_watchdogs"))
+    builder.row(InlineKeyboardButton(text="🍿 Netflix Account (2 pts)", callback_data="redeem_netflix"))
+    builder.row(InlineKeyboardButton(text="🎮 حساب ستيم عشوائي (1 pts)", callback_data="redeem_steam"))
     builder.row(InlineKeyboardButton(text=t["btn_back"], callback_data="main_menu"))
 
     await callback.message.edit_text(t["redeem_title"], reply_markup=builder.as_markup())
@@ -707,22 +706,23 @@ async def process_redeem(callback: types.CallbackQuery):
 
     category = callback.data.split("_", 1)[1]
 
+    # تكلفة النقاط حسب الأسعار الجديدة
     if category == "re4remake":
-        cost = 30
+        cost = 18
     elif category in ["godofwar", "cyberpunk"]:
-        cost = 20
+        cost = 12
     elif category == "requiem":
-        cost = 15
-    elif category in ["rdr2", "fifa26", "thelastofus", "spiderman1", "miles", "spiderman2", "forza", "tsushima", "batman", "naruto", "plague1", "plague2"]:
         cost = 10
+    elif category in ["rdr2", "fifa26", "thelastofus", "spiderman1", "miles", "spiderman2", "forza", "tsushima", "batman", "naruto", "plague1", "plague2"]:
+        cost = 6
     elif category == "gta":
-        cost = 8
+        cost = 4
     elif category == "watchdogs":
-        cost = 5
-    elif category == "netflix":
         cost = 3
-    else:
+    elif category == "netflix":
         cost = 2
+    else:
+        cost = 1
 
     conn = sqlite3.connect("store_bot.db")
     cursor = conn.cursor()
@@ -798,9 +798,10 @@ async def main():
         cursor.execute("SELECT COUNT(*) FROM accounts WHERE category = ?", (cat,))
         if cursor.fetchone()[0] == 0:
             cursor.execute("INSERT INTO accounts (username, password, category) VALUES (?, ?, ?)", (user_val, pass_val, cat))
-            conn.commit()
-
+    
+    conn.commit()
     conn.close()
+
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
