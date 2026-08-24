@@ -9,7 +9,9 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 # --- إعدادات البوت ---
 API_TOKEN = "8948074959:AAGIqYYLk0UeD7KUmWbRKqgdYs1n44dRjmo"
 SUPPORT_USERNAME = "@r1ivlk"
-REQUIRED_CHANNEL = "@r1iv_k"  # يوزر قناتك للاشتراك الإجباري
+
+# القنوات الإجبارية (القناة الأساسية وشات القناة)
+REQUIRED_CHANNELS = ["@r1iv_k", "@r1ivk_chat"]
 
 # باقات شراء النقاط بالنجوم (أسعار جديدة ورخيصة ومشجعة)
 POINT_PACKAGES = {
@@ -94,10 +96,11 @@ texts = {
         "success_reaccess": "🔓 **إليك بيانات الحساب (مشتري مسبقاً):**\n\n👤 **اسم المستخدم (Username):** `{}`\n🔑 **كلمة المرور (Password):**\n`{}`",
         "btn_back": "⬅️ رجوع للقائمة الرئيسية",
         "btn_share": "📤 مشاركة الرابط مع الأصدقاء",
-        "sub_required": "⚠️ **عذراً، يجب عليك الاشتراك في قناة المتجر أولاً لكي تتمكن من استخدام البوت!**\n\nيرجى الانضمام للقناة ثم اضغط على زر التحقق أدناه 👇",
-        "btn_subscribe": "📢 اشترك في القناة الآن",
+        "sub_required": "⚠️ **عذراً، يجب عليك الاشتراك في قنوات المتجر وشات القناة أولاً لكي تتمكن من استخدام البوت!**\n\nيرجى الانضمام إليهما ثم اضغط على زر التحقق أدناه 👇",
+        "btn_subscribe_ch1": "📢 اشترك في القناة الأولى",
+        "btn_subscribe_ch2": "💬 انضم لشات القناة",
         "btn_check_sub": "🔄 تحقق من الاشتراك",
-        "not_subscribed_yet": "❌ لم تقم بالاشتراك في القناة بعد! يرجى الاشتراك ثم حاول مجدداً."
+        "not_subscribed_yet": "❌ لم تقم بالاشتراك في جميع القنوات بعد! يرجى الاشتراك ثم حاول مجدداً."
     },
     "en": {
         "welcome": "Welcome to r1ivk Store 🎮\nChoose your preferred language or explore the updated game sections below 👇.",
@@ -119,10 +122,11 @@ texts = {
         "success_reaccess": "🔓 **Account details (Previously purchased):**\n\n👤 **Username:** `{}`\n🔑 **Password:**\n`{}`",
         "btn_back": "Main Menu",
         "btn_share": "📤 Share Link with Friends",
-        "sub_required": "⚠️ **Sorry, you must subscribe to the store channel first to use this bot!**\n\nPlease join the channel and click the check button below 👇",
-        "btn_subscribe": "📢 Subscribe to Channel",
+        "sub_required": "⚠️ **Sorry, you must subscribe to the store channels first to use this bot!**\n\nPlease join them and click the check button below 👇",
+        "btn_subscribe_ch1": "📢 Subscribe to Channel 1",
+        "btn_subscribe_ch2": "💬 Join Channel Chat",
         "btn_check_sub": "🔄 Check Subscription",
-        "not_subscribed_yet": "❌ You haven't subscribed to the channel yet! Please subscribe and try again."
+        "not_subscribed_yet": "❌ You haven't subscribed to all channels yet! Please subscribe and try again."
     }
 }
 
@@ -136,12 +140,14 @@ def get_lang(user_id):
 
 async def check_subscription(user_id: int) -> bool:
     try:
-        member = await bot.get_chat_member(chat_id=REQUIRED_CHANNEL, user_id=user_id)
-        if member.status in ["member", "administrator", "creator"]:
-            return True
+        for channel in REQUIRED_CHANNELS:
+            member = await bot.get_chat_member(chat_id=channel, user_id=user_id)
+            if member.status not in ["member", "administrator", "creator"]:
+                return False
+        return True
     except Exception as e:
         logging.error(f"Error checking subscription: {e}")
-    return False
+        return False
 
 def get_main_keyboard(lang):
     t = texts[lang]
@@ -162,7 +168,8 @@ async def cmd_start(message: types.Message):
         lang = get_lang(user_id)
         t = texts[lang]
         builder = InlineKeyboardBuilder()
-        builder.row(InlineKeyboardButton(text=t["btn_subscribe"], url=f"https://t.me/{REQUIRED_CHANNEL.replace('@', '')}"))
+        builder.row(InlineKeyboardButton(text=t["btn_subscribe_ch1"], url=f"https://t.me/{REQUIRED_CHANNELS[0].replace('@', '')}"))
+        builder.row(InlineKeyboardButton(text=t["btn_subscribe_ch2"], url=f"https://t.me/{REQUIRED_CHANNELS[1].replace('@', '')}"))
         builder.row(InlineKeyboardButton(text=t["btn_check_sub"], callback_data="check_sub"))
         await message.answer(t["sub_required"], reply_markup=builder.as_markup())
         return
@@ -182,7 +189,6 @@ async def cmd_start(message: types.Message):
                 cursor.execute("SELECT user_id FROM users WHERE user_id = ?", (ref_id,))
                 if cursor.fetchone():
                     referred_by = ref_id
-                    # منح نقطة حقيقية لصاحب الدعوة
                     cursor.execute("UPDATE users SET points = points + 1 WHERE user_id = ?", (ref_id,))
                     
                     cursor.execute("SELECT lang, points FROM users WHERE user_id = ?", (ref_id,))
@@ -233,7 +239,7 @@ async def verify_subscription(callback: types.CallbackQuery):
 async def toggle_lang(callback: types.CallbackQuery):
     user_id = callback.from_user.id
     if not await check_subscription(user_id):
-        await callback.answer("⚠️ يجب الاشتراك في القناة أولاً!", show_alert=True)
+        await callback.answer("⚠️ يجب الاشتراك في القنوات أولاً!", show_alert=True)
         return
 
     current_lang = get_lang(user_id)
@@ -253,7 +259,7 @@ async def toggle_lang(callback: types.CallbackQuery):
 async def show_account_info(callback: types.CallbackQuery):
     user_id = callback.from_user.id
     if not await check_subscription(user_id):
-        await callback.answer("⚠️ يجب الاشتراك في القناة أولاً!", show_alert=True)
+        await callback.answer("⚠️ يجب الاشتراك في القنوات أولاً!", show_alert=True)
         return
 
     lang = get_lang(user_id)
@@ -284,7 +290,7 @@ async def show_account_info(callback: types.CallbackQuery):
 async def earn_points_menu(callback: types.CallbackQuery):
     user_id = callback.from_user.id
     if not await check_subscription(user_id):
-        await callback.answer("⚠️ يجب الاشتراك في القناة أولاً!", show_alert=True)
+        await callback.answer("⚠️ يجب الاشتراك في القنوات أولاً!", show_alert=True)
         return
 
     lang = get_lang(user_id)
@@ -327,7 +333,7 @@ def parse_points_payload(payload: str):
 async def buy_points_menu(callback: types.CallbackQuery):
     user_id = callback.from_user.id
     if not await check_subscription(user_id):
-        await callback.answer("⚠️ يجب الاشتراك في القناة أولاً!", show_alert=True)
+        await callback.answer("⚠️ يجب الاشتراك في القنوات أولاً!", show_alert=True)
         return
 
     lang = get_lang(user_id)
@@ -364,7 +370,7 @@ async def buy_points_menu(callback: types.CallbackQuery):
 async def create_points_invoice(callback: types.CallbackQuery):
     user_id = callback.from_user.id
     if not await check_subscription(user_id):
-        await callback.answer("⚠️ يجب الاشتراك في القناة أولاً!", show_alert=True)
+        await callback.answer("⚠️ يجب الاشتراك في القنوات أولاً!", show_alert=True)
         return
 
     lang = get_lang(user_id)
@@ -591,13 +597,12 @@ async def payment_support(message: types.Message):
 async def redeem_menu(callback: types.CallbackQuery):
     user_id = callback.from_user.id
     if not await check_subscription(user_id):
-        await callback.answer("⚠️ يجب الاشتراك في القناة أولاً!", show_alert=True)
+        await callback.answer("⚠️ يجب الاشتراك في القنوات أولاً!", show_alert=True)
         return
 
     lang = get_lang(user_id)
     t = texts[lang]
 
-    # الأسعار الجديدة والمتوسطة للاستبدال
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="🔥 Resident Evil 4 Remake + 30 AAA Games (18 pts)", callback_data="redeem_re4remake"))
     builder.row(InlineKeyboardButton(text="🪓 God of War (2018) + Ragnarok (12 pts)", callback_data="redeem_godofwar"))
@@ -628,7 +633,7 @@ async def redeem_menu(callback: types.CallbackQuery):
 async def my_purchases_menu(callback: types.CallbackQuery):
     user_id = callback.from_user.id
     if not await check_subscription(user_id):
-        await callback.answer("⚠️ يجب الاشتراك في القناة أولاً!", show_alert=True)
+        await callback.answer("⚠️ يجب الاشتراك في القنوات أولاً!", show_alert=True)
         return
 
     lang = get_lang(user_id)
@@ -664,7 +669,7 @@ async def my_purchases_menu(callback: types.CallbackQuery):
 async def show_my_account(callback: types.CallbackQuery):
     user_id = callback.from_user.id
     if not await check_subscription(user_id):
-        await callback.answer("⚠️ يجب الاشتراك في القناة أولاً!", show_alert=True)
+        await callback.answer("⚠️ يجب الاشتراك في القنوات أولاً!", show_alert=True)
         return
 
     lang = get_lang(user_id)
@@ -698,7 +703,7 @@ async def show_my_account(callback: types.CallbackQuery):
 async def process_redeem(callback: types.CallbackQuery):
     user_id = callback.from_user.id
     if not await check_subscription(user_id):
-        await callback.answer("⚠️ يجب الاشتراك في القناة أولاً!", show_alert=True)
+        await callback.answer("⚠️ يجب الاشتراك في القنوات أولاً!", show_alert=True)
         return
 
     lang = get_lang(user_id)
@@ -706,7 +711,6 @@ async def process_redeem(callback: types.CallbackQuery):
 
     category = callback.data.split("_", 1)[1]
 
-    # تكلفة النقاط حسب الأسعار الجديدة
     if category == "re4remake":
         cost = 18
     elif category in ["godofwar", "cyberpunk"]:
@@ -760,7 +764,7 @@ async def process_redeem(callback: types.CallbackQuery):
 async def back_to_main(callback: types.CallbackQuery):
     user_id = callback.from_user.id
     if not await check_subscription(user_id):
-        await callback.answer("⚠️ يجب الاشتراك في القناة أولاً!", show_alert=True)
+        await callback.answer("⚠️ يجب الاشتراك في القنوات أولاً!", show_alert=True)
         return
 
     lang = get_lang(user_id)
@@ -798,10 +802,11 @@ async def main():
         cursor.execute("SELECT COUNT(*) FROM accounts WHERE category = ?", (cat,))
         if cursor.fetchone()[0] == 0:
             cursor.execute("INSERT INTO accounts (username, password, category) VALUES (?, ?, ?)", (user_val, pass_val, cat))
-    
+
     conn.commit()
     conn.close()
 
+    print("Bot is starting...")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
