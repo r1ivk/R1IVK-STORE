@@ -11,7 +11,7 @@ API_TOKEN = "8948074959:AAGIqYYLk0UeD7KUmWbRKqgdYs1n44dRjmo"
 SUPPORT_USERNAME = "@r1ivlk"
 
 # القنوات الإجبارية (القناة الأساسية وشات القناة)
-REQUIRED_CHANNELS = ["@r1iv_k", "@r1ivk_chat"]
+REQUIRED_CHANNELS = ["@r1iv_k"]
 
 # باقات شراء النقاط بالنجوم (أسعار جديدة ورخيصة ومشجعة)
 POINT_PACKAGES = {
