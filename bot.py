@@ -6,9 +6,8 @@ from aiogram.filters import Command, CommandStart
 from aiogram.types import InlineKeyboardButton, LabeledPrice
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-# --- إعدادات البوت والمدير ---
+# --- إعدادات البوت ---
 API_TOKEN = "8948074959:AAG5_PFOSO-pzNrZENuowrWA3HtdMyeIGfo"
-ADMIN_ID = 6266959915  # الآيدي الخاص بك كمدير للبوت
 SUPPORT_USERNAME = "@r1ivlk"
 
 # القنوات الإجبارية (القناة الأساسية وشات القناة)
@@ -160,38 +159,6 @@ def get_main_keyboard(lang):
     builder.row(InlineKeyboardButton(text=t["btn_my_purchases"], callback_data="my_purchases"))
     builder.row(InlineKeyboardButton(text=t["btn_lang"], callback_data="toggle_lang"))
     return builder.as_markup()
-
-# --- أمر إحصائيات البوت (خاص بك فقط) ---
-@dp.message(Command("stats"))
-async def bot_statistics(message: types.Message):
-    if message.from_user.id != ADMIN_ID:
-        return
-
-    conn = sqlite3.connect("store_bot.db")
-    cursor = conn.cursor()
-    cursor.execute("SELECT COUNT(*) FROM users")
-    total_users = cursor.fetchone()[0]
-    conn.close()
-
-    await message.answer(f"📊 **إحصائيات البوت:**\n\n👥 إجمالي عدد المستخدمين: `{total_users}` مستخدم")
-
-# --- نظام مراقبة شات المستخدمين وإعادة التوجيه لك (مصحح وبدون مشاكل للأزرار) ---
-@dp.message(F.chat.type == "private")
-async def monitor_user_chats(message: types.Message):
-    if message.from_user.id == ADMIN_ID or (message.text and message.text.startswith("/")):
-        return
-    
-    if not message.text:
-        return
-    
-    try:
-        await bot.forward_message(
-            chat_id=ADMIN_ID,
-            from_chat_id=message.chat.id,
-            message_id=message.message_id
-        )
-    except Exception as e:
-        logging.error(f"Failed to forward user message: {e}")
 
 @dp.message(CommandStart())
 async def cmd_start(message: types.Message):
@@ -831,16 +798,15 @@ async def main():
         ("netflix", "netflix_premium_acc_01", "pass_net_789")
     ]
 
-    for cat, usr, pwd in accounts_to_add:
-        cursor.execute("SELECT COUNT(*) FROM accounts WHERE username = ?", (usr,))
-        if cursor.fetchone()[0] == 0:
-            cursor.execute("INSERT INTO accounts (username, password, category) VALUES (?, ?, ?)", (usr, pwd, cat))
+    for cat, user_val, pass_val in accounts_to_add:
+        cursor.execute(
+            "INSERT INTO accounts (category, username, password) VALUES (?, ?, ?)",
+            (cat, user_val, pass_val)
+        )
 
     conn.commit()
     conn.close()
 
-    print("Bot is starting...")
-    await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
