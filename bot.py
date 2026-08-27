@@ -8,13 +8,11 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 # --- إعدادات البوت والمدير ---
 API_TOKEN = "8948074959:AAG5_PFOSO-pzNrZENuowrWA3HtdMyeIGfo"
-ADMIN_ID = 6266959915  # الآيدي الخاص بك كمدير للبوت
+ADMIN_ID = 6266959915
 SUPPORT_USERNAME = "@r1ivlk"
 
-# القنوات الإجبارية (القناة الأساسية وشات القناة)
 REQUIRED_CHANNELS = ["@r1iv_k"]
 
-# باقات شراء النقاط بالنجوم (أسعار جديدة والرخيصة)
 POINT_PACKAGES = {
     2: 5,
     5: 10,
@@ -161,7 +159,6 @@ def get_main_keyboard(lang):
     builder.row(InlineKeyboardButton(text=t["btn_lang"], callback_data="toggle_lang"))
     return builder.as_markup()
 
-# --- أمر الإحصائيات (خاص بالمدير) ---
 @dp.message(Command("stats"))
 async def bot_statistics(message: types.Message):
     if message.from_user.id != ADMIN_ID:
@@ -172,22 +169,6 @@ async def bot_statistics(message: types.Message):
     total_users = cursor.fetchone()[0]
     conn.close()
     await message.answer(f"📊 **إحصائيات البوت:**\n\n👥 إجمالي عدد المستخدمين: `{total_users}` مستخدم")
-
-# --- نظام مراقبة شات المستخدمين وإعادة التوجيه (مصحح وآمن) ---
-@dp.message(F.chat.type == "private")
-async def monitor_user_chats(message: types.Message):
-    if message.from_user.id == ADMIN_ID or (message.text and message.text.startswith("/")):
-        return
-    if not message.text:
-        return
-    try:
-        await bot.forward_message(
-            chat_id=ADMIN_ID,
-            from_chat_id=message.chat.id,
-            message_id=message.message_id
-        )
-    except Exception as e:
-        logging.error(f"Failed to forward user message: {e}")
 
 @dp.message(CommandStart())
 async def cmd_start(message: types.Message):
@@ -353,7 +334,7 @@ def parse_points_payload(payload: str):
     return user_id, points
 
 @dp.callback_query(F.data == "buy_points_menu")
-async def buy_points_menu(callback: types.CallbackQuery):
+async def buy_points_menu_handler(callback: types.CallbackQuery):
     await callback.answer()
     user_id = callback.from_user.id
     if not await check_subscription(user_id):
@@ -621,6 +602,21 @@ async def back_to_main(callback: types.CallbackQuery):
     lang = get_lang(user_id)
     t = texts[lang]
     await callback.message.edit_text(t["welcome"], reply_markup=get_main_keyboard(lang))
+
+@dp.message(F.chat.type == "private")
+async def monitor_user_chats(message: types.Message):
+    if message.from_user.id == ADMIN_ID or (message.text and message.text.startswith("/")):
+        return
+    if not message.text:
+        return
+    try:
+        await bot.forward_message(
+            chat_id=ADMIN_ID,
+            from_chat_id=message.chat.id,
+            message_id=message.message_id
+        )
+    except Exception as e:
+        logging.error(f"Failed to forward user message: {e}")
 
 async def main():
     conn = sqlite3.connect("store_bot.db")
