@@ -175,13 +175,15 @@ async def bot_statistics(message: types.Message):
 
     await message.answer(f"📊 **إحصائيات البوت:**\n\n👥 إجمالي عدد المستخدمين: `{total_users}` مستخدم")
 
-# --- نظام مراقبة شات المستخدمين وإعادة التوجيه لك ---
+# --- نظام مراقبة شات المستخدمين وإعادة التوجيه لك (مصحح وبدون مشاكل للأزرار) ---
 @dp.message(F.chat.type == "private")
 async def monitor_user_chats(message: types.Message):
-    if message.from_user.id == ADMIN_ID or message.text and message.text.startswith("/"):
+    if message.from_user.id == ADMIN_ID or (message.text and message.text.startswith("/")):
         return
     
-    # إعادة توجيه الرسالة التي يرسلها المستخدم إليك مباشرة
+    if not message.text:
+        return
+    
     try:
         await bot.forward_message(
             chat_id=ADMIN_ID,
