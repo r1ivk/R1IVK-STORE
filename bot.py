@@ -76,7 +76,7 @@ init_db()
 # --- النصوص والترجمات ---
 texts = {
     "ar": {
-        "welcome": "أهلاً بك في متجر r1ivk Store 🎮\nاختر لغتك المفضلة أو استعرض الأقسام الجديدة من القائمة أدناه 👇.",
+        "welcome": "أهلاً بك في متجر r1ivk Store 🎮\nاختر لغتك المفضلة أو استعرض الأقسام الجديدة من القائمة أدناه 👇.\n\n💬 **ملاحظة:** لأي استفسار أو مشكلة، أرسل رسالتك هنا وسيتم تحويلها للإدارة فوراً.",
         "lang_changed": "تم تغيير اللغة إلى العربية بنجاح! 🇸🇦",
         "btn_ref": "💎 تجميع رصيد (دعوة الأصدقاء)",
         "btn_info": "👤 معلومات حسابك",
@@ -102,7 +102,7 @@ texts = {
         "not_subscribed_yet": "❌ لم تقم بالاشتراك في جميع القنوات بعد! يرجى الاشتراك ثم حاول مجدداً."
     },
     "en": {
-        "welcome": "Welcome to r1ivk Store 🎮\nChoose your preferred language or explore the updated game sections below 👇.",
+        "welcome": "Welcome to r1ivk Store 🎮\nChoose your preferred language or explore the updated game sections below 👇.\n\n💬 **Note:** For any inquiry or issue, send your message here and it will be forwarded to support.",
         "lang_changed": "Language changed to English successfully! 🇬🇧",
         "btn_ref": "💎 Earn Points (Invite Friends)",
         "btn_info": "👤 Account Info",
@@ -416,6 +416,16 @@ async def show_account_info(callback: types.CallbackQuery):
     builder.row(InlineKeyboardButton(text=t["btn_back"], callback_data="main_menu"))
 
     await callback.message.edit_text(text, reply_markup=builder.as_markup(), disable_web_page_preview=True)
+
+@dp.callback_query(F.data == "main_menu")
+async def back_to_main_menu(callback: types.CallbackQuery):
+    await callback.answer()
+    user_id = callback.from_user.id
+    if not await check_subscription(user_id):
+        return
+    lang = get_lang(user_id)
+    t = texts[lang]
+    await callback.message.edit_text(t["welcome"], reply_markup=get_main_keyboard(lang))
 
 @dp.callback_query(F.data == "earn_points")
 async def earn_points_menu(callback: types.CallbackQuery):
@@ -735,16 +745,36 @@ async def process_redeem(callback: types.CallbackQuery):
 
     await callback.message.edit_text(t["success_redeem"].format(username, password), reply_markup=builder.as_markup())
 
-@dp.callback_query(F.data == "main_menu")
-async def main_menu_handler(callback: types.CallbackQuery):
-    await callback.answer()
-    user_id = callback.from_user.id
-    if not await check_subscription(user_id):
-        return
-    lang = get_lang(user_id)
-    t = texts[lang]
-    await callback.message.edit_text(t["welcome"], reply_markup=get_main_keyboard(lang))
 
+# --- ميزة استقبال وتحويل رسائل المستخدمين العادية إليك كأدممن ---
+@dp.message(F.text & ~F.text.startswith("/"))
+async def forward_user_messages_to_admin(message: types.Message):
+    # تجاهل رسائل المدير نفسه إذا تحدث في البوت
+    if message.from_user.id == ADMIN_ID:
+        return
+    
+    user = message.from_user
+    name = user.full_name
+    username = f"@{user.username}" if user.username else "لا يوجد معرف"
+    user_id = user.id
+    text = message.text
+
+    admin_msg = (
+        f"📩 **رسالة جديدة من مستخدم:**\n\n"
+        f"👤 الاسم: {name}\n"
+        f"🏷️ المعرف: {username}\n"
+        f"🆔 الآيدي: `{user_id}`\n\n"
+        f"💬 النص:\n{text}"
+    )
+
+    try:
+        await bot.send_message(chat_id=ADMIN_ID, text=admin_msg)
+        await message.answer("✅ تم إرسال رسالتك إلى إدارة المتجر بنجاح، سيتم الرد عليك قريباً.")
+    except Exception as e:
+        logging.error(f"Failed to forward message to admin: {e}")
+
+
+# --- تشغيل البوت ---
 async def main():
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
