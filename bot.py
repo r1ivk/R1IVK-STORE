@@ -170,6 +170,48 @@ async def bot_statistics(message: types.Message):
     conn.close()
     await message.answer(f"📊 **إحصائيات البوت:**\n\n👥 إجمالي عدد المستخدمين: `{total_users}` مستخدم")
 
+@dp.message(Command("add_accounts"))
+async def seed_accounts_cmd(message: types.Message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    
+    conn = sqlite3.connect("store_bot.db")
+    cursor = conn.cursor()
+
+    accounts_to_add = [
+        ("re4remake", "pinokio542", "EYK2Y99Z2TK5"),
+        ("godofwar", "seekkeygow2018", "XUgStsAmHGUM"),
+        ("cyberpunk", "c21282", "asdAVXab21Z"),
+        ("requiem", "req_user_official_1984", "pass_req_secure_99"),
+        ("rdr2", "followinghoverfly3787", "f-r-e-e-akk-tg:@hyznet"),
+        ("fifa26", "svfwqhmr6zrth7rj", "Ivancito2009_"),
+        ("thelastofus", "thelast1q", "playerok.com/profile/QAVIX"),
+        ("spiderman1", "sp1_remastered_user", "pass_sp1_2026"),
+        ("miles", "miles_morales_pc_user", "pass_miles_01"),
+        ("spiderman2", "sp2_by_heero", "https://t.me/steamaccountsog"),
+        ("forza", "duhl15773", "Muhammadknio12!"),
+        ("tsushima", "MythicStore_GOT_01", "https://t.me/Steam_Family"),
+        ("batman", "batman_arkham_trilogy_user", "pass_arkham_123"),
+        ("naruto", "naruto_storm_series_pc", "pass_naruto_storm_99"),
+        ("plague1", "aplaguetale_innocence_pc", "pass_plague_innocence_1"),
+        ("plague2", "aplaguetale_requiem_pc", "pass_plague_requiem_2"),
+        ("gta", "hedpy459961", "gta_secure_pass_88"),
+        ("watchdogs", "jp30ekXr", "wa72ITSA"),
+        ("netflix", "netflix_premium_acc_01", "pass_net_789"),
+        ("steam", "random_steam_user_01", "steam_pass_secure_123")
+    ]
+
+    added_count = 0
+    for cat, user_val, pass_val in accounts_to_add:
+        cursor.execute("SELECT id FROM accounts WHERE category = ? AND username = ?", (cat, user_val))
+        if not cursor.fetchone():
+            cursor.execute("INSERT INTO accounts (username, password, category) VALUES (?, ?, ?)", (user_val, pass_val, cat))
+            added_count += 1
+
+    conn.commit()
+    conn.close()
+    await message.answer(f"✅ تمت إضافة وتحديث الحسابات بنجاح!\n📦 عدد الحسابات الجديدة المضافة: `{added_count}`")
+
 @dp.message(CommandStart())
 async def cmd_start(message: types.Message):
     user_id = message.from_user.id
@@ -537,34 +579,43 @@ async def show_my_account(callback: types.CallbackQuery):
 
 @dp.callback_query(F.data.startswith("redeem_"))
 async def process_redeem(callback: types.CallbackQuery):
-    await callback.answer()
     user_id = callback.from_user.id
     if not await check_subscription(user_id):
         return
 
     lang = get_lang(user_id)
     t = texts[lang]
+    
     category = callback.data.split("_", 1)[1]
 
-    if category == "re4remake":
-        cost = 18
-    elif category in ["godofwar", "cyberpunk"]:
-        cost = 12
-    elif category == "requiem":
-        cost = 10
-    elif category in ["rdr2", "fifa26", "thelastofus", "spiderman1", "miles", "spiderman2", "forza", "tsushima", "batman", "naruto", "plague1", "plague2"]:
-        cost = 6
-    elif category == "gta":
-        cost = 4
-    elif category == "watchdogs":
-        cost = 3
-    elif category == "netflix":
-        cost = 2
-    else:
-        cost = 1
+    costs = {
+        "re4remake": 18,
+        "godofwar": 12,
+        "cyberpunk": 12,
+        "requiem": 10,
+        "rdr2": 6,
+        "fifa26": 6,
+        "thelastofus": 6,
+        "spiderman1": 6,
+        "miles": 6,
+        "spiderman2": 6,
+        "forza": 6,
+        "tsushima": 6,
+        "batman": 6,
+        "naruto": 6,
+        "plague1": 6,
+        "plague2": 6,
+        "gta": 4,
+        "watchdogs": 3,
+        "netflix": 2,
+        "steam": 1
+    }
+
+    cost = costs.get(category, 1)
 
     conn = sqlite3.connect("store_bot.db")
     cursor = conn.cursor()
+    
     cursor.execute("SELECT id, username, password FROM accounts WHERE category = ? LIMIT 1", (category,))
     acc = cursor.fetchone()
 
@@ -574,8 +625,10 @@ async def process_redeem(callback: types.CallbackQuery):
         return
 
     acc_id, username, password = acc
+    
     cursor.execute("SELECT points FROM users WHERE user_id = ?", (user_id,))
-    user_points = cursor.fetchone()[0]
+    user_row = cursor.fetchone()
+    user_points = user_row[0] if user_row else 0
 
     if user_points < cost:
         await callback.answer(t["not_enough_points"], show_alert=True)
@@ -586,6 +639,8 @@ async def process_redeem(callback: types.CallbackQuery):
     cursor.execute("INSERT OR IGNORE INTO purchases (user_id, account_id) VALUES (?, ?)", (user_id, acc_id))
     conn.commit()
     conn.close()
+
+    await callback.answer()
 
     await callback.message.edit_text(
         t["success_redeem"].format(username, password),
@@ -619,39 +674,7 @@ async def monitor_user_chats(message: types.Message):
         logging.error(f"Failed to forward user message: {e}")
 
 async def main():
-    conn = sqlite3.connect("store_bot.db")
-    cursor = conn.cursor()
-
-    accounts_to_add = [
-        ("re4remake", "pinokio542", "EYK2Y99Z2TK5"),
-        ("godofwar", "seekkeygow2018", "XUgStsAmHGUM"),
-        ("cyberpunk", "c21282", "asdAVXab21Z"),
-        ("requiem", "req_user_official_1984", "pass_req_secure_99"),
-        ("rdr2", "followinghoverfly3787", "f-r-e-e-akk-tg:@hyznet"),
-        ("fifa26", "svfwqhmr6zrth7rj", "Ivancito2009_"),
-        ("thelastofus", "thelast1q", "playerok.com/profile/QAVIX"),
-        ("spiderman1", "sp1_remastered_user", "pass_sp1_2026"),
-        ("miles", "miles_morales_pc_user", "pass_miles_01"),
-        ("spiderman2", "sp2_by_heero", "https://t.me/steamaccountsog"),
-        ("forza", "duhl15773", "Muhammadknio12!"),
-        ("tsushima", "MythicStore_GOT_01", "https://t.me/Steam_Family"),
-        ("batman", "batman_arkham_trilogy_user", "pass_arkham_123"),
-        ("naruto", "naruto_storm_series_pc", "pass_naruto_storm_99"),
-        ("plague1", "aplaguetale_innocence_pc", "pass_plague_innocence_1"),
-        ("plague2", "aplaguetale_requiem_pc", "pass_plague_requiem_2"),
-        ("gta", "hedpy459961", "gta_secure_pass_88"),
-        ("watchdogs", "jp30ekXr", "wa72ITSA"),
-        ("netflix", "netflix_premium_acc_01", "pass_net_789")
-    ]
-
-    for cat, user_val, pass_val in accounts_to_add:
-        cursor.execute("SELECT id FROM accounts WHERE category = ? AND username = ?", (cat, user_val))
-        if not cursor.fetchone():
-            cursor.execute("INSERT INTO accounts (username, password, category) VALUES (?, ?, ?)", (user_val, pass_val, cat))
-
-    conn.commit()
-    conn.close()
-
+    init_db()
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 
