@@ -189,6 +189,7 @@ async def add_admin_points(message: types.Message):
 
     await message.answer(f"💎 تمت إضافة `{amount}` نقطة إلى رصيدك بنجاح!\n💰 رصيدك الحالي: `{new_points}` نقطة.")
 
+# --- أمر إعطاء النقاط الفعلي والمبرمج بدقة للمستخدمين ---
 @dp.message(Command("give"))
 async def give_points_to_user(message: types.Message):
     if message.from_user.id != ADMIN_ID:
@@ -205,6 +206,7 @@ async def give_points_to_user(message: types.Message):
     conn = sqlite3.connect("store_bot.db")
     cursor = conn.cursor()
     
+    # التحقق من وجود المستخدم في قاعدة البيانات أو إنشاء سجل له إن لم يكن مسجلاً
     cursor.execute("SELECT points FROM users WHERE user_id = ?", (target_user_id,))
     user = cursor.fetchone()
 
@@ -219,15 +221,17 @@ async def give_points_to_user(message: types.Message):
     conn.commit()
     conn.close()
 
+    # تأكيد نجاح العملية للمدير
     await message.answer(f"✅ تمت إضافة `{points_to_give}` نقطة للمستخدم `{target_user_id}` بنجاح!\n💰 رصيده الحالي: `{new_balance}` نقطة.")
     
+    # إرسال إشعار تلقائي للمستخدم بأن رصيده قد تم شحنه
     try:
         await bot.send_message(
             chat_id=target_user_id,
             text=f"🎁 **تم شحن رصيدك! أضاف لك المدير `{points_to_give}` نقطة.**\n💰 رصيدك الحالي: `{new_balance}` نقطة."
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logging.error(f"Failed to notify user {target_user_id} about given points: {e}")
 
 @dp.message(Command("add_accounts"))
 async def seed_accounts_cmd(message: types.Message):
@@ -746,7 +750,7 @@ async def process_redeem(callback: types.CallbackQuery):
     await callback.message.edit_text(t["success_redeem"].format(username, password), reply_markup=builder.as_markup())
 
 
-# --- تحويل رسائل المستخدمين العادية إليك مباشرة (باستثناء الأوامر التي تبدأ بـ /) ---
+# --- تحويل رسائل المستخدمين العادية للإدارة مع زر مراسلة مباشر بالآيدي ---
 @dp.message(F.text & ~F.text.startswith("/"))
 async def forward_user_messages_to_admin(message: types.Message):
     if message.from_user.id == ADMIN_ID:
@@ -766,8 +770,12 @@ async def forward_user_messages_to_admin(message: types.Message):
         f"💬 النص:\n{text}"
     )
 
+    # إضافة زر مباشر يفتح محادثة العضو فوراً بناءً على الـ ID الخاص به
+    builder = InlineKeyboardBuilder()
+    builder.row(types.InlineKeyboardButton(text="💬 مراسلة المستخدم", url=f"tg://user?id={user_id}"))
+
     try:
-        await bot.send_message(chat_id=ADMIN_ID, text=admin_msg)
+        await bot.send_message(chat_id=ADMIN_ID, text=admin_msg, reply_markup=builder.as_markup())
     except Exception as e:
         logging.error(f"Failed to forward message to admin: {e}")
 
