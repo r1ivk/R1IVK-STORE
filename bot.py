@@ -746,10 +746,9 @@ async def process_redeem(callback: types.CallbackQuery):
     await callback.message.edit_text(t["success_redeem"].format(username, password), reply_markup=builder.as_markup())
 
 
-# --- ميزة استقبال وتحويل رسائل المستخدمين العادية إليك كأدممن ---
+# --- تحويل رسائل المستخدمين العادية إليك مباشرة (باستثناء الأوامر التي تبدأ بـ /) ---
 @dp.message(F.text & ~F.text.startswith("/"))
 async def forward_user_messages_to_admin(message: types.Message):
-    # تجاهل رسائل المدير نفسه إذا تحدث في البوت
     if message.from_user.id == ADMIN_ID:
         return
     
@@ -769,7 +768,6 @@ async def forward_user_messages_to_admin(message: types.Message):
 
     try:
         await bot.send_message(chat_id=ADMIN_ID, text=admin_msg)
-        await message.answer("✅ تم إرسال رسالتك إلى إدارة المتجر بنجاح، سيتم الرد عليك قريباً.")
     except Exception as e:
         logging.error(f"Failed to forward message to admin: {e}")
 
