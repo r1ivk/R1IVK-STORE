@@ -170,6 +170,25 @@ async def bot_statistics(message: types.Message):
     conn.close()
     await message.answer(f"📊 **إحصائيات البوت:**\n\n👥 إجمالي عدد المستخدمين: `{total_users}` مستخدم")
 
+@dp.message(Command("add_points"))
+async def add_admin_points(message: types.Message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    
+    args = message.text.split()
+    amount = int(args[1]) if len(args) > 1 and args[1].isdigit() else 100
+
+    conn = sqlite3.connect("store_bot.db")
+    cursor = conn.cursor()
+    cursor.execute("INSERT OR IGNORE INTO users (user_id, points, referred_by, lang) VALUES (?, 0, NULL, 'ar')", (ADMIN_ID,))
+    cursor.execute("UPDATE users SET points = points + ? WHERE user_id = ?", (amount, ADMIN_ID))
+    cursor.execute("SELECT points FROM users WHERE user_id = ?", (ADMIN_ID,))
+    new_points = cursor.fetchone()[0]
+    conn.commit()
+    conn.close()
+
+    await message.answer(f"💎 تمت إضافة `{amount}` نقطة إلى رصيدك بنجاح!\n💰 رصيدك الحالي: `{new_points}` نقطة.")
+
 @dp.message(Command("add_accounts"))
 async def seed_accounts_cmd(message: types.Message):
     if message.from_user.id != ADMIN_ID:
@@ -210,7 +229,7 @@ async def seed_accounts_cmd(message: types.Message):
 
     conn.commit()
     conn.close()
-    await message.answer(f"✅ تمت إضافة وتحديث الحسابات بنجاح!\n📦 عدد الحسابات الجديدة المضافة: `{added_count}`")
+    await message.answer(f"✅ تمت إضافة الحسابات بنجاح!\n📦 عدد الحسابات الجديدة المضافة: `{added_count}`")
 
 @dp.message(CommandStart())
 async def cmd_start(message: types.Message):
@@ -616,16 +635,7 @@ async def process_redeem(callback: types.CallbackQuery):
     conn = sqlite3.connect("store_bot.db")
     cursor = conn.cursor()
     
-    cursor.execute("SELECT id, username, password FROM accounts WHERE category = ? LIMIT 1", (category,))
-    acc = cursor.fetchone()
-
-    if not acc:
-        await callback.answer(t["no_accounts"], show_alert=True)
-        conn.close()
-        return
-
-    acc_id, username, password = acc
-    
+    # التحقق من نقاط المستخدم أولاً
     cursor.execute("SELECT points FROM users WHERE user_id = ?", (user_id,))
     user_row = cursor.fetchone()
     user_points = user_row[0] if user_row else 0
@@ -634,6 +644,28 @@ async def process_redeem(callback: types.CallbackQuery):
         await callback.answer(t["not_enough_points"], show_alert=True)
         conn.close()
         return
+
+    # النظام اللانهائي: البحث عن حساب لم يشتره هذا المستخدم من قبل لنفس الفئة، أو اختيار أي حساب متاح بشكل عشوائي ليتيح تكرار الشراء
+    cursor.execute("""
+        SELECT id, username, password FROM accounts 
+        WHERE category = ? 
+        AND id NOT IN (SELECT account_id FROM purchases WHERE user_id = ?)
+        LIMIT 1
+    """, (category, user_id))
+    
+    acc = cursor.fetchone()
+    
+    # إذا كان المستخدم اشترى كل الحسابات المتاحة لهذه اللعبة مسبقاً، نسمح له باختيار حساب عشوائي منها (تكرار لا نهائي)
+    if not acc:
+        cursor.execute("SELECT id, username, password FROM accounts WHERE category = ? ORDER BY RANDOM() LIMIT 1", (category,))
+        acc = cursor.fetchone()
+
+    if not acc:
+        await callback.answer(t["no_accounts"], show_alert=True)
+        conn.close()
+        return
+
+    acc_id, username, password = acc
 
     cursor.execute("UPDATE users SET points = points - ? WHERE user_id = ?", (cost, user_id))
     cursor.execute("INSERT OR IGNORE INTO purchases (user_id, account_id) VALUES (?, ?)", (user_id, acc_id))
