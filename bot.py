@@ -189,48 +189,6 @@ async def add_admin_points(message: types.Message):
 
     await message.answer(f"💎 تمت إضافة `{amount}` نقطة إلى رصيدك بنجاح!\n💰 رصيدك الحالي: `{new_points}` نقطة.")
 
-# --- الأمر الجديد لإعطاء النقاط لأي آيدي محدد ---
-@dp.message(Command("give"))
-async def give_points_to_user(message: types.Message):
-    if message.from_user.id != ADMIN_ID:
-        return
-    
-    args = message.text.split()
-    if len(args) < 3 or not args[1].isdigit() or not args[2].isdigit():
-        await message.answer("⚠️ الاستخدام الصحيح:\n`/give [آيدي_المستخدم] [عدد_النقاط]`", parse_mode="Markdown")
-        return
-
-    target_user_id = int(args[1])
-    points_to_give = int(args[2])
-
-    conn = sqlite3.connect("store_bot.db")
-    cursor = conn.cursor()
-    
-    cursor.execute("SELECT points FROM users WHERE user_id = ?", (target_user_id,))
-    user = cursor.fetchone()
-
-    if not user:
-        await message.answer("❌ هذا المستخدم غير مسجل في قاعدة بيانات البوت.")
-        conn.close()
-        return
-
-    cursor.execute("UPDATE users SET points = points + ? WHERE user_id = ?", (points_to_give, target_user_id))
-    cursor.execute("SELECT points FROM users WHERE user_id = ?", (target_user_id,))
-    new_balance = cursor.fetchone()[0]
-    
-    conn.commit()
-    conn.close()
-
-    await message.answer(f"✅ تمت إضافة `{points_to_give}` نقطة للمستخدم `{target_user_id}` بنجاح!\n💰 رصيده الحالي: `{new_balance}` نقطة.")
-    
-    try:
-        await bot.send_message(
-            chat_id=target_user_id,
-            text=f"🎁 **تم شحن رصيدك! أضاف لك المدير `{points_to_give}` نقطة.**\n💰 رصيدك الحالي: `{new_balance}` نقطة."
-        )
-    except Exception:
-        pass
-
 @dp.message(Command("add_accounts"))
 async def seed_accounts_cmd(message: types.Message):
     if message.from_user.id != ADMIN_ID:
@@ -247,6 +205,7 @@ async def seed_accounts_cmd(message: types.Message):
         ("rdr2", "followinghoverfly3787", "f-r-e-e-akk-tg:@hyznet"),
         ("fifa26", "svfwqhmr6zrth7rj", "Ivancito2009_"),
         ("thelastofus", "thelast1q", "playerok.com/profile/QAVIX"),
+        ("spiderman_trilogy", "hamorilal", "Gk6q63F1"),
         ("spiderman1", "sp1_remastered_user", "pass_sp1_2026"),
         ("miles", "miles_morales_pc_user", "pass_miles_01"),
         ("spiderman2", "sp2_by_heero", "https://t.me/steamaccountsog"),
@@ -273,6 +232,7 @@ async def seed_accounts_cmd(message: types.Message):
     conn.close()
     await message.answer(f"✅ تمت إضافة الحسابات بنجاح!\n📦 عدد الحسابات الجديدة المضافة: `{added_count}`")
 
+# تخزين مؤقت لمعرف الدعوة للمستخدمين الجدد غير المشتركين
 pending_referrals = {}
 
 @dp.message(CommandStart())
@@ -316,9 +276,48 @@ async def cmd_start(message: types.Message):
         await message.answer(t["sub_required"], reply_markup=builder.as_markup())
         return
 
+    # إذا اشترك مسبقاً، نتحقق من تفعيل الدعوة ومنح النقطة للمُحيل فوراً مع إرسال إشعار له
+    await check_and_reward_referral(user_id)
+
     lang = get_lang(user_id)
     t = texts[lang]
     await message.answer(t["welcome"], reply_markup=get_main_keyboard(lang))
+
+async def check_and_reward_referral(user_id: int):
+    conn = sqlite3.connect("store_bot.db")
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT referred_by FROM users WHERE user_id = ?", (user_id,))
+    row = cursor.fetchone()
+    ref_id = row[0] if row else None
+
+    if not ref_id and user_id in pending_referrals:
+        ref_id = pending_referrals[user_id]
+        cursor.execute("UPDATE users SET referred_by = ? WHERE user_id = ?", (ref_id, user_id))
+        conn.commit()
+
+    if ref_id:
+        cursor.execute("SELECT points, lang FROM users WHERE user_id = ?", (ref_id,))
+        ref_data = cursor.fetchone()
+        
+        if ref_data:
+            cursor.execute("UPDATE users SET points = points + 1 WHERE user_id = ?", (ref_id,))
+            conn.commit()
+
+            cursor.execute("SELECT lang, points FROM users WHERE user_id = ?", (ref_id,))
+            updated_ref_data = cursor.fetchone()
+            if updated_ref_data:
+                ref_lang, new_ref_points = updated_ref_data
+                notif_text = f"🎉 **New Referral!**\n\n👤 A new person joined via your link.\n💎 Your balance is now: `{new_ref_points}` pts." if ref_lang == "en" else f"🎉 **تم تسجيل دعوة جديدة!**\n\n👤 انضم شخص جديد عبر رابطك.\n💎 زاد رصيدك وأصبح: `{new_ref_points}` نقطة."
+                try:
+                    await bot.send_message(chat_id=ref_id, text=notif_text)
+                except Exception as e:
+                    logging.error(f"Failed to send referral notification: {e}")
+
+        if user_id in pending_referrals:
+            del pending_referrals[user_id]
+
+    conn.close()
 
 @dp.callback_query(F.data == "check_sub")
 async def verify_subscription(callback: types.CallbackQuery):
@@ -336,36 +335,12 @@ async def verify_subscription(callback: types.CallbackQuery):
             ref_id = pending_referrals.get(user_id)
             cursor.execute("INSERT INTO users (user_id, points, referred_by, lang) VALUES (?, 0, ?, 'ar')", (user_id, ref_id))
             conn.commit()
-            user = ('ar', ref_id)
-
-        lang, referred_by = user
-
-        if not referred_by and user_id in pending_referrals:
-            referred_by = pending_referrals[user_id]
-            cursor.execute("UPDATE users SET referred_by = ? WHERE user_id = ?", (referred_by, user_id))
-            conn.commit()
-
-        if referred_by:
-            cursor.execute("SELECT points FROM users WHERE user_id = ?", (referred_by,))
-            if cursor.fetchone():
-                cursor.execute("SELECT COUNT(*) FROM users WHERE referred_by = ? AND user_id = ?", (referred_by, user_id))
-                cursor.execute("UPDATE users SET points = points + 1 WHERE user_id = ?", (referred_by,))
-                conn.commit()
-
-                cursor.execute("SELECT lang, points FROM users WHERE user_id = ?", (referred_by,))
-                ref_data = cursor.fetchone()
-                if ref_data:
-                    ref_lang, new_ref_points = ref_data
-                    notif_text = f"🎉 **New Referral!**\n\n👤 A new person joined via your link.\n💎 Your balance is now: `{new_ref_points}` pts." if ref_lang == "en" else f"🎉 **تم تسجيل دعوة جديدة!**\n\n👤 انضم شخص جديد عبر رابطك.\n💎 زاد رصيدك وأصبح: `{new_ref_points}` نقطة."
-                    try:
-                        await bot.send_message(chat_id=referred_by, text=notif_text)
-                    except Exception as e:
-                        logging.error(f"Failed to send referral notification: {e}")
-            
-            if user_id in pending_referrals:
-                del pending_referrals[user_id]
 
         conn.close()
+
+        await check_and_reward_referral(user_id)
+
+        lang = get_lang(user_id)
         await callback.message.edit_text(t["welcome"], reply_markup=get_main_keyboard(lang))
     else:
         await callback.answer(t["not_subscribed_yet"], show_alert=True)
@@ -576,6 +551,7 @@ async def redeem_menu(callback: types.CallbackQuery):
     builder.row(InlineKeyboardButton(text="🪓 God of War (2018) + Ragnarok (12 pts)", callback_data="redeem_godofwar"))
     builder.row(InlineKeyboardButton(text="🤖 Cyberpunk 2077 (12 pts)", callback_data="redeem_cyberpunk"))
     builder.row(InlineKeyboardButton(text="🧟 Resident Evil Requiem (10 pts)", callback_data="redeem_requiem"))
+    builder.row(InlineKeyboardButton(text="🕷️ حسابات Spider-Man 1, 2, 3 (جميع الأجزاء) (8 pts)", callback_data="redeem_spiderman_trilogy"))
     builder.row(InlineKeyboardButton(text="🤠 Red Dead Redemption 2 (6 pts)", callback_data="redeem_rdr2"))
     builder.row(InlineKeyboardButton(text="⚽ FC 26 / FIFA 26 (6 pts)", callback_data="redeem_fifa26"))
     builder.row(InlineKeyboardButton(text="🌿 The Last of Us Part I & II (6 pts)", callback_data="redeem_thelastofus"))
@@ -676,6 +652,7 @@ async def process_redeem(callback: types.CallbackQuery):
         "godofwar": 12,
         "cyberpunk": 12,
         "requiem": 10,
+        "spiderman_trilogy": 8,
         "rdr2": 6,
         "fifa26": 6,
         "thelastofus": 6,
@@ -710,14 +687,15 @@ async def process_redeem(callback: types.CallbackQuery):
 
     cursor.execute("""
         SELECT id, username, password FROM accounts 
-        WHERE category = ? AND id NOT IN (
-            SELECT account_id FROM purchases WHERE user_id = ?
-        ) LIMIT 1
+        WHERE category = ? 
+        AND id NOT IN (SELECT account_id FROM purchases WHERE user_id = ?)
+        LIMIT 1
     """, (category, user_id))
+    
     acc = cursor.fetchone()
-
+    
     if not acc:
-        cursor.execute("SELECT id, username, password FROM accounts WHERE category = ? LIMIT 1", (category,))
+        cursor.execute("SELECT id, username, password FROM accounts WHERE category = ? ORDER BY RANDOM() LIMIT 1", (category,))
         acc = cursor.fetchone()
 
     if not acc:
@@ -732,22 +710,41 @@ async def process_redeem(callback: types.CallbackQuery):
     conn.commit()
     conn.close()
 
-    builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text=t["btn_back"], callback_data="main_menu"))
+    await callback.answer()
 
-    await callback.message.edit_text(t["success_redeem"].format(username, password), reply_markup=builder.as_markup())
+    await callback.message.edit_text(
+        t["success_redeem"].format(username, password),
+        reply_markup=InlineKeyboardBuilder().row(InlineKeyboardButton(text=t["btn_back"], callback_data="main_menu")).as_markup()
+    )
 
 @dp.callback_query(F.data == "main_menu")
-async def main_menu_handler(callback: types.CallbackQuery):
+async def back_to_main(callback: types.CallbackQuery):
     await callback.answer()
     user_id = callback.from_user.id
     if not await check_subscription(user_id):
         return
+
     lang = get_lang(user_id)
     t = texts[lang]
     await callback.message.edit_text(t["welcome"], reply_markup=get_main_keyboard(lang))
 
+@dp.message(F.chat.type == "private")
+async def monitor_user_chats(message: types.Message):
+    if message.from_user.id == ADMIN_ID or (message.text and message.text.startswith("/")):
+        return
+    if not message.text:
+        return
+    try:
+        await bot.forward_message(
+            chat_id=ADMIN_ID,
+            from_chat_id=message.chat.id,
+            message_id=message.message_id
+        )
+    except Exception as e:
+        logging.error(f"Failed to forward user message: {e}")
+
 async def main():
+    init_db()
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 
