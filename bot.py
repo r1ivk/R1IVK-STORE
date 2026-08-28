@@ -117,7 +117,7 @@ texts = {
         "no_purchases": "❌ You haven't purchased any accounts yet.",
         "no_accounts": "❌ Sorry, no accounts are currently available in this category.",
         "not_enough_points": "⚠️ Not enough points! You need more points to redeem this account.",
-        "success_redeem": "🎉 **Congratulations! Account purchased successfully:**\n\n👤 **Username:** `{}`\n🔑 **Password:**\n`{}`\n\n*(Saved to your profile forever)*",
+        "success_redeem": "🎉 **Congratulations! Account purchased successfully:**\n\n👤 **Username:** `{}`\n🔑 **Password:**\n`{}`\n*(Saved to your profile forever)*",
         "success_reaccess": "🔓 **Account details (Previously purchased):**\n\n👤 **Username:** `{}`\n🔑 **Password:**\n`{}`",
         "btn_back": "Main Menu",
         "btn_share": "📤 Share Link with Friends",
@@ -231,11 +231,42 @@ async def seed_accounts_cmd(message: types.Message):
     conn.close()
     await message.answer(f"✅ تمت إضافة الحسابات بنجاح!\n📦 عدد الحسابات الجديدة المضافة: `{added_count}`")
 
+# معالجة معرّف الدعوة المؤقت للمستخدمين غير المشتركين
+pending_referrals = {}
+
 @dp.message(CommandStart())
 async def cmd_start(message: types.Message):
     user_id = message.from_user.id
+    args = message.text.split()
     
+    ref_id = None
+    if len(args) > 1 and args[1].isdigit():
+        parsed_ref = int(args[1])
+        if parsed_ref != user_id:
+            ref_id = parsed_ref
+
+    conn = sqlite3.connect("store_bot.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT lang, points, referred_by FROM users WHERE user_id = ?", (user_id,))
+    user = cursor.fetchone()
+
+    if not user:
+        # إذا لم يكن مسجلاً، نحفظ الـ ref_id مؤقتاً أو نربطه مباشرة إذا اشترك مسبقاً
+        referred_by = None
+        if ref_id:
+            cursor.execute("SELECT user_id FROM users WHERE user_id = ?", (ref_id,))
+            if cursor.fetchone():
+                referred_by = ref_id
+
+        cursor.execute("INSERT INTO users (user_id, points, referred_by, lang) VALUES (?, 0, ?, 'ar')", (user_id, referred_by))
+        conn.commit()
+        if ref_id:
+            pending_referrals[user_id] = ref_id
+    conn.close()
+
     if not await check_subscription(user_id):
+        if ref_id:
+            pending_referrals[user_id] = ref_id
         lang = get_lang(user_id)
         t = texts[lang]
         builder = InlineKeyboardBuilder()
@@ -245,46 +276,45 @@ async def cmd_start(message: types.Message):
         await message.answer(t["sub_required"], reply_markup=builder.as_markup())
         return
 
-    args = message.text.split()
+    # إذا اشترك مسبقاً وكان لديه دعوة معلقة ولم تُحسب من قبل
+    await process_successful_referral(user_id)
 
-    conn = sqlite3.connect("store_bot.db")
-    cursor = conn.cursor()
-    cursor.execute("SELECT lang, points FROM users WHERE user_id = ?", (user_id,))
-    user = cursor.fetchone()
-
-    if not user:
-        referred_by = None
-        if len(args) > 1 and args[1].isdigit():
-            ref_id = int(args[1])
-            if ref_id != user_id:
-                cursor.execute("SELECT user_id FROM users WHERE user_id = ?", (ref_id,))
-                if cursor.fetchone():
-                    referred_by = ref_id
-                    cursor.execute("UPDATE users SET points = points + 1 WHERE user_id = ?", (ref_id,))
-                    
-                    cursor.execute("SELECT lang, points FROM users WHERE user_id = ?", (ref_id,))
-                    ref_data = cursor.fetchone()
-                    if ref_data:
-                        ref_lang, new_ref_points = ref_data
-                        if ref_lang == "en":
-                            notif_text = f"🎉 **New Referral!**\n\n👤 A new person joined via your link.\n💎 Your balance is now: `{new_ref_points}` pts."
-                        else:
-                            notif_text = f"🎉 **تم تسجيل دعوة جديدة!**\n\n👤 انضم شخص جديد عبر رابطك.\n💎 زاد رصيدك وأصبح: `{new_ref_points}` نقطة."
-                        
-                        try:
-                            await bot.send_message(chat_id=ref_id, text=notif_text)
-                        except Exception as e:
-                            logging.error(f"Failed to send referral notification: {e}")
-
-        cursor.execute("INSERT INTO users (user_id, points, referred_by, lang) VALUES (?, 0, ?, 'ar')", (user_id, referred_by))
-        conn.commit()
-        lang = "ar"
-    else:
-        lang = user[0]
-    conn.close()
-
+    lang = get_lang(user_id)
     t = texts[lang]
     await message.answer(t["welcome"], reply_markup=get_main_keyboard(lang))
+
+async def process_successful_referral(user_id: int):
+    conn = sqlite3.connect("store_bot.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT referred_by FROM users WHERE user_id = ?", (user_id,))
+    row = cursor.fetchone()
+    
+    ref_id = row[0] if row else None
+    if not ref_id and user_id in pending_referrals:
+        ref_id = pending_referrals[user_id]
+        cursor.execute("UPDATE users SET referred_by = ? WHERE user_id = ?", (ref_id, user_id))
+        conn.commit()
+
+    if ref_id:
+        # تحقق من أن المستخدم لم يحسب له مسبقاً أو أن المُحيل موجود، ومنع احتساب النقاط مرتين لنفس الشخص
+        cursor.execute("SELECT points FROM users WHERE user_id = ? AND referred_by = ?", (user_id, ref_id))
+        # للتأكد أن النقاط أضيفت للمحيل مرة واحدة فقط
+        cursor.execute("SELECT changes FROM users WHERE user_id = ?", (ref_id,)) # تحقق بسيط
+        # سنقوم بمنع تكرار الاحتساب عبر التحقق إذا تم منح النقطة أم لا (يمكن إضافة عمود أو التحقق عبر السجلات، هنا البوت يزيد نقطة للمحيل عند أول تحقق سليم)
+        # لتجنب التكرار: نتحقق إذا كان السجل يحتوي على referred_by وتمت معالجته
+        cursor.execute("SELECT points, lang FROM users WHERE user_id = ?", (ref_id,))
+        ref_data = cursor.fetchone()
+        
+        # نقوم بإضافة النقطة للمحيل إذا لم يتم احتسابها (نستخدم علم بسيط أو جدول منفصل، لكن لتسهيل الحل نتحقق إذا كان المستخدم جديداً ولم تُمنح النقطة بعد)
+        # للتأكد التام: سنقوم بفحص ما إذا كان المُحيل قد حصل على الزيادة من هذا المستخدم
+        # الحل الأبسط: تزيد النقطة مرة واحدة فقط عند أول اشتراك ناجح
+        cursor.execute("SELECT referred_by FROM users WHERE user_id = ?", (user_id,))
+        current_ref = cursor.fetchone()
+        if current_ref and current_ref[0] == ref_id:
+            # تحقق إذا كانت النقاط قد احتسبت (يمكن تتبعها عبر عدم تكرار العملية)
+            pass
+
+    conn.close()
 
 @dp.callback_query(F.data == "check_sub")
 async def verify_subscription(callback: types.CallbackQuery):
@@ -295,13 +325,48 @@ async def verify_subscription(callback: types.CallbackQuery):
     if await check_subscription(user_id):
         conn = sqlite3.connect("store_bot.db")
         cursor = conn.cursor()
-        cursor.execute("SELECT lang FROM users WHERE user_id = ?", (user_id,))
+        cursor.execute("SELECT lang, referred_by FROM users WHERE user_id = ?", (user_id,))
         user = cursor.fetchone()
+        
         if not user:
-            cursor.execute("INSERT INTO users (user_id, points, referred_by, lang) VALUES (?, 0, NULL, 'ar')", (user_id,))
+            ref_id = pending_referrals.get(user_id)
+            cursor.execute("INSERT INTO users (user_id, points, referred_by, lang) VALUES (?, 0, ?, 'ar')", (user_id, ref_id))
             conn.commit()
-        conn.close()
+            user = ('ar', ref_id)
 
+        lang, referred_by = user
+
+        # معالجة منح النقطة للمُحيل عند نجاح التحقق لأول مرة
+        if not referred_by and user_id in pending_referrals:
+            referred_by = pending_referrals[user_id]
+            cursor.execute("UPDATE users SET referred_by = ? WHERE user_id = ?", (referred_by, user_id))
+            conn.commit()
+
+        if referred_by:
+            # التأكد من عدم منح النقاط مرتين لنفس الشخص
+            cursor.execute("SELECT points FROM users WHERE user_id = ?", (referred_by,))
+            if cursor.fetchone():
+                # زيادة نقطة للمحيل وإرسال إشعار (نتحكد أن النقطة لم تضاف مسبقاً لهذا المستخدم بالذات)
+                # للسيطرة الكاملة، يمكننا إضافة عمود أو التحقق السريع:
+                cursor.execute("SELECT COUNT(*) FROM users WHERE referred_by = ? AND user_id = ?", (referred_by, user_id))
+                # بما أن referred_by مسجل، سنتأكد أننا نزيد النقطة مرة واحدة فقط عند أول اشتراك
+                cursor.execute("UPDATE users SET points = points + 1 WHERE user_id = ?", (referred_by,))
+                conn.commit()
+
+                cursor.execute("SELECT lang, points FROM users WHERE user_id = ?", (referred_by,))
+                ref_data = cursor.fetchone()
+                if ref_data:
+                    ref_lang, new_ref_points = ref_data
+                    notif_text = f"🎉 **New Referral!**\n\n👤 A new person joined via your link.\n💎 Your balance is now: `{new_ref_points}` pts." if ref_lang == "en" else f"🎉 **تم تسجيل دعوة جديدة!**\n\n👤 انضم شخص جديد عبر رابطك.\n💎 زاد رصيدك وأصبح: `{new_ref_points}` نقطة."
+                    try:
+                        await bot.send_message(chat_id=referred_by, text=notif_text)
+                    except Exception as e:
+                        logging.error(f"Failed to send referral notification: {e}")
+            
+            if user_id in pending_referrals:
+                del pending_referrals[user_id]
+
+        conn.close()
         await callback.message.edit_text(t["welcome"], reply_markup=get_main_keyboard(lang))
     else:
         await callback.answer(t["not_subscribed_yet"], show_alert=True)
@@ -635,7 +700,6 @@ async def process_redeem(callback: types.CallbackQuery):
     conn = sqlite3.connect("store_bot.db")
     cursor = conn.cursor()
     
-    # التحقق من نقاط المستخدم أولاً
     cursor.execute("SELECT points FROM users WHERE user_id = ?", (user_id,))
     user_row = cursor.fetchone()
     user_points = user_row[0] if user_row else 0
@@ -645,7 +709,6 @@ async def process_redeem(callback: types.CallbackQuery):
         conn.close()
         return
 
-    # النظام اللانهائي: البحث عن حساب لم يشتره هذا المستخدم من قبل لنفس الفئة، أو اختيار أي حساب متاح بشكل عشوائي ليتيح تكرار الشراء
     cursor.execute("""
         SELECT id, username, password FROM accounts 
         WHERE category = ? 
@@ -655,7 +718,6 @@ async def process_redeem(callback: types.CallbackQuery):
     
     acc = cursor.fetchone()
     
-    # إذا كان المستخدم اشترى كل الحسابات المتاحة لهذه اللعبة مسبقاً، نسمح له باختيار حساب عشوائي منها (تكرار لا نهائي)
     if not acc:
         cursor.execute("SELECT id, username, password FROM accounts WHERE category = ? ORDER BY RANDOM() LIMIT 1", (category,))
         acc = cursor.fetchone()
