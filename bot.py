@@ -66,6 +66,13 @@ def init_db():
         )
     """)
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS admin_chat (
+            admin_id INTEGER PRIMARY KEY,
+            active_target_user_id INTEGER
+        )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -216,6 +223,17 @@ async def give_points_to_user(message: types.Message):
         await bot.send_message(chat_id=target_user_id, text=f"🎁 **تم شحن رصيدك! أضاف لك المدير `{points_to_give}` نقطة.**\n💰 رصيدك الحالي: `{new_balance}` نقطة.")
     except Exception as e:
         logging.error(f"Failed to notify user: {e}")
+
+@dp.message(Command("end"))
+async def end_chat_cmd(message: types.Message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    conn = sqlite3.connect("store_bot.db")
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM admin_chat WHERE admin_id = ?", (ADMIN_ID,))
+    conn.commit()
+    conn.close()
+    await message.answer("🔴 **تم إنهاء وضع الدردشة المباشرة.** الرسائل القادمة لن تُحول لأحد حتى تختار عميلًا جديدًا.")
 
 @dp.message(Command("add_accounts"))
 async def seed_accounts_cmd(message: types.Message):
@@ -686,26 +704,74 @@ async def show_my_purchases(callback: types.CallbackQuery):
     builder.row(InlineKeyboardButton(text=t["btn_back"], callback_data="main_menu"))
     await callback.message.edit_text(text, reply_markup=builder.as_markup())
 
+@dp.callback_query(F.data.startswith("start_chat_"))
+async def start_chat_with_user(callback: types.CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        return
+    try:
+        target_user_id = int(callback.data.replace("start_chat_", ""))
+    except ValueError:
+        return
+
+    conn = sqlite3.connect("store_bot.db")
+    cursor = conn.cursor()
+    cursor.execute("INSERT OR REPLACE INTO admin_chat (admin_id, active_target_user_id) VALUES (?, ?)", (ADMIN_ID, target_user_id))
+    conn.commit()
+    conn.close()
+
+    await callback.answer("✅ تم فتح الشات المباشر!", show_alert=True)
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="❌ إنهاء الشات المباشر", callback_data="end_chat_admin"))
+    await callback.message.answer(f"🟢 **تم ربط شات البوت لديك بالعميل (`{target_user_id}`).**\nأي رسالة تكتبها هنا الآن سترسل فوراً إلى شات العميل الخاص بالبوت.\nلإغلاق الشات أرسل `/end` أو اضغط الزر أدناه:", reply_markup=builder.as_markup())
+
+@dp.callback_query(F.data == "end_chat_admin")
+async def end_chat_callback(callback: types.CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        return
+    conn = sqlite3.connect("store_bot.db")
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM admin_chat WHERE admin_id = ?", (ADMIN_ID,))
+    conn.commit()
+    conn.close()
+    await callback.answer("تم الإنهاء", show_alert=True)
+    await callback.message.answer("🔴 **تم إغلاق الشات المباشر.**")
+
 @dp.message(F.text & ~F.text.startswith("/"))
 async def handle_user_messages(message: types.Message):
     user_id = message.from_user.id
     
+    # إذا كنت أنت المدير وترسل رسالة بالبوت
     if user_id == ADMIN_ID:
+        conn = sqlite3.connect("store_bot.db")
+        cursor = conn.cursor()
+        cursor.execute("SELECT active_target_user_id FROM admin_chat WHERE admin_id = ?", (ADMIN_ID,))
+        row = cursor.fetchone()
+        conn.close()
+
+        if row and row[0]:
+            target_user_id = row[0]
+            try:
+                await bot.send_message(chat_id=target_user_id, text=f"{message.text}")
+                await message.react([types.ReactionTypeEmoji(emoji="👍")])
+            except Exception as e:
+                await message.answer(f"❌ فشل الإرسال للعميل: {e}")
         return
 
+    # إذا أرسل أي مستخدم رسالة (مناسبة جداً للمسابقات أو الاستفسارات)
     forward_text = (
-        f"📩 **رسالة جديدة من عميل / مستخدم:**\n\n"
+        f"🚨 **رسالة جديدة للمسابقة / الاستفسار:**\n\n"
         f"👤 الاسم: {message.from_user.full_name}\n"
         f"🆔 الآيدي: `{user_id}`\n\n"
-        f"💬 النص:\n{message.text}"
+        f"💬 الرسالة:\n{message.text}"
     )
 
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="💬 مراسلة المستخدم (خاص)", url=f"tg://user?id={user_id}"))
+    # هذا الزر يحولك مباشرة للشات الخاص معه في البوت بنقرة واحدة
+    builder.row(InlineKeyboardButton(text="💬 تواصل معه بشات البوت", callback_data=f"start_chat_{user_id}"))
 
     try:
         await bot.send_message(ADMIN_ID, forward_text, reply_markup=builder.as_markup(), parse_mode="Markdown")
-        await message.answer("✅ تم إرسال رسالتك إلى إدارة المتجر بنجاح، سيتم الرد عليك قريباً.")
+        await message.answer("✅ تم إرسال رسالتك إلى إدارة المتجر بنجاح.")
     except Exception as e:
         logging.error(f"Failed to forward message to admin: {e}")
 
