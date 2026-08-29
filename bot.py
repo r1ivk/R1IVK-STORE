@@ -248,6 +248,7 @@ async def seed_accounts_cmd(message: types.Message):
         ("spiderman_all", "hamorilal", "Gk6q63F1"),
         ("miles", "jayderr20", "N2DddawdUKtF2"),
         ("forza", "duhl15773", "Muhammadknio12!"),
+        ("forza5", "forza5_store_user_01", "ForzaHorizon5_Secured_2026"),
         ("tsushima", "MythicStore_GOT_01", "https://t.me/Steam_Family"),
         ("batman", "batman_arkham_trilogy_user", "pass_arkham_123"),
         ("naruto", "naruto_storm_series_pc", "pass_naruto_storm_99"),
@@ -256,7 +257,8 @@ async def seed_accounts_cmd(message: types.Message):
         ("gta", "hedpy459961", "gta_secure_pass_88"),
         ("watchdogs", "jp30ekXr", "wa72ITSA"),
         ("netflix", "netflix_premium_acc_01", "pass_net_789"),
-        ("steam", "random_steam_user_01", "steam_pass_secure_123")
+        ("steam", "random_steam_user_01", "steam_pass_secure_123"),
+        ("custom_user", "yxzt46984", "Edindzeko2007")
     ]
 
     added_count = 0
@@ -588,7 +590,8 @@ async def redeem_menu(callback: types.CallbackQuery):
     builder.row(InlineKeyboardButton(text="🌿 The Last of Us Part I & II (6 pts)" if lang == "ar" else "🌿 The Last of Us Part I & II (6 pts)", callback_data="redeem_thelastofus"))
     builder.row(InlineKeyboardButton(text="🕷️ جميع اجزاء سبايدر مان 1 2 3 (10 pts)" if lang == "ar" else "🕷️ All Spider-Man Parts 1 2 3 (10 pts)", callback_data="redeem_spiderman_all"))
     builder.row(InlineKeyboardButton(text="🕷️ Spider-Man: Miles Morales (6 pts)" if lang == "ar" else "🕷️ Spider-Man: Miles Morales (6 pts)", callback_data="redeem_miles"))
-    builder.row(InlineKeyboardButton(text="🏎️ Forza Horizon 6 (6 pts)" if lang == "ar" else "🏎️ Forza Horizon 6 (6 pts)", callback_data="redeem_forza"))
+    builder.row(InlineKeyboardButton(text="🏎️ Forza Horizon 4 (6 pts)" if lang == "ar" else "🏎️ Forza Horizon 4 (6 pts)", callback_data="redeem_forza"))
+    builder.row(InlineKeyboardButton(text="🏎️ Forza Horizon 5 (6 pts)" if lang == "ar" else "🏎️ Forza Horizon 5 (6 pts)", callback_data="redeem_forza5"))
     builder.row(InlineKeyboardButton(text="🗡️ Ghost of Tsushima (Gold Edition) (6 pts)" if lang == "ar" else "🗡️ Ghost of Tsushima (Gold Edition) (6 pts)", callback_data="redeem_tsushima"))
     builder.row(InlineKeyboardButton(text="🦇 Batman Arkham Trilogy (6 pts)" if lang == "ar" else "🦇 Batman Arkham Trilogy (6 pts)", callback_data="redeem_batman"))
     builder.row(InlineKeyboardButton(text="🌀 Naruto Shippuden: Ultimate Ninja Storm (6 pts)" if lang == "ar" else "🌀 Naruto Shippuden: Ultimate Ninja Storm (6 pts)", callback_data="redeem_naruto"))
@@ -598,6 +601,7 @@ async def redeem_menu(callback: types.CallbackQuery):
     builder.row(InlineKeyboardButton(text="💻 Watch Dogs (3 pts)" if lang == "ar" else "💻 Watch Dogs (3 pts)", callback_data="redeem_watchdogs"))
     builder.row(InlineKeyboardButton(text="🍿 Netflix Account (2 pts)" if lang == "ar" else "🍿 Netflix Account (2 pts)", callback_data="redeem_netflix"))
     builder.row(InlineKeyboardButton(text="🎮 حساب ستيم عشوائي (1 pts)" if lang == "ar" else "🎮 Random Steam Account (1 pts)", callback_data="redeem_steam"))
+    builder.row(InlineKeyboardButton(text="🎁 حساب مخصص / Custom Account (3 pts)" if lang == "ar" else "🎁 Custom Account (3 pts)", callback_data="redeem_custom_user"))
     builder.row(InlineKeyboardButton(text=t["btn_back"], callback_data="main_menu"))
 
     await callback.message.edit_text(t["redeem_title"], reply_markup=builder.as_markup())
@@ -688,6 +692,7 @@ async def process_redeem(callback: types.CallbackQuery):
         "spiderman_all": 10,
         "miles": 6,
         "forza": 6,
+        "forza5": 6,
         "tsushima": 6,
         "batman": 6,
         "naruto": 6,
@@ -696,7 +701,8 @@ async def process_redeem(callback: types.CallbackQuery):
         "gta": 4,
         "watchdogs": 3,
         "netflix": 2,
-        "steam": 1
+        "steam": 1,
+        "custom_user": 3
     }
 
     cost = costs.get(category, 1)
