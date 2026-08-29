@@ -278,8 +278,7 @@ async def seed_accounts_cmd(message: types.Message):
     conn.close()
     await message.answer(f"✅ تمت إضافة الحسابات بنجاح!\n📦 عدد الحسابات الجديدة المضافة: `{added_count}`")
 
-pending_referrals = {}
-
+# --- معالجة أمر البداية (Start) وتخزين الداعي بقاعدة البيانات مباشرة ---
 @dp.message(CommandStart())
 async def cmd_start(message: types.Message):
     user_id = message.from_user.id
@@ -298,25 +297,27 @@ async def cmd_start(message: types.Message):
     existing_user = cursor.fetchone()
 
     if not existing_user:
-        referred_by = None
+        # مستخدم جديد تماماً، نقوم بحفظه مع تحديد الداعي إن وجد
+        valid_ref = None
         if ref_id:
             cursor.execute("SELECT user_id FROM users WHERE user_id = ?", (ref_id,))
             if cursor.fetchone():
-                referred_by = ref_id
+                valid_ref = ref_id
 
-        cursor.execute("INSERT INTO users (user_id, points, referred_by, lang) VALUES (?, 0, ?, 'ar')", (user_id, referred_by))
+        cursor.execute("INSERT INTO users (user_id, points, referred_by, lang) VALUES (?, 0, ?, 'ar')", (user_id, valid_ref))
         conn.commit()
-        if ref_id:
-            pending_referrals[user_id] = ref_id
     else:
+        # مستخدم قديم لكنه دخل عبر رابط دعوة لأول مرة ولم يكن لديه داعٍ مسجل
         if ref_id and not existing_user[1]:
-            pending_referrals[user_id] = ref_id
+            cursor.execute("SELECT user_id FROM users WHERE user_id = ?", (ref_id,))
+            if cursor.fetchone() and ref_id != user_id:
+                cursor.execute("UPDATE users SET referred_by = ? WHERE user_id = ?", (ref_id, user_id))
+                conn.commit()
 
     conn.close()
 
+    # فحص الاشتراك الإجباري
     if not await check_subscription(user_id):
-        if ref_id:
-            pending_referrals[user_id] = ref_id
         lang = get_lang(user_id)
         t = texts[lang]
         builder = InlineKeyboardBuilder()
@@ -330,6 +331,7 @@ async def cmd_start(message: types.Message):
     t = texts[lang]
     await message.answer(t["welcome"], reply_markup=get_main_keyboard(lang))
 
+# --- التحقق من الاشتراك وإعطاء نقاط الإحالة فوراً ---
 @dp.callback_query(F.data == "check_sub")
 async def verify_subscription(callback: types.CallbackQuery):
     user_id = callback.from_user.id
@@ -339,38 +341,41 @@ async def verify_subscription(callback: types.CallbackQuery):
     if await check_subscription(user_id):
         conn = sqlite3.connect("store_bot.db")
         cursor = conn.cursor()
-        cursor.execute("SELECT lang, referred_by FROM users WHERE user_id = ?", (user_id,))
-        user = cursor.fetchone()
         
-        if not user:
-            ref_id = pending_referrals.get(user_id)
-            cursor.execute("INSERT INTO users (user_id, points, referred_by, lang) VALUES (?, 0, ?, 'ar')", (user_id, ref_id))
+        cursor.execute("SELECT lang, referred_by, points FROM users WHERE user_id = ?", (user_id,))
+        user_row = cursor.fetchone()
+
+        if not user_row:
+            cursor.execute("INSERT INTO users (user_id, points, referred_by, lang) VALUES (?, 0, NULL, 'ar')", (user_id,))
             conn.commit()
-            user = ('ar', ref_id)
+            lang, referred_by = 'ar', None
+        else:
+            lang, referred_by, _ = user_row
 
-        lang, referred_by = user
-
-        if not referred_by and user_id in pending_referrals:
-            referred_by = pending_referrals[user_id]
-            cursor.execute("UPDATE users SET referred_by = ? WHERE user_id = ?", (referred_by, user_id))
-            conn.commit()
-
+        # معالجة منح النقطة للداعي إذا لم يتم احتسابها مسبقاً
+        # نتأكد أن المستخدم لديه referred_by وأنه لم يقم بأخذ النقطة بعد (يمكننا اعتماد أن النقاط تضاف مرة واحدة عند التحقق الناجح)
         if referred_by:
-            cursor.execute("SELECT points FROM users WHERE user_id = ?", (referred_by,))
-            if cursor.fetchone():
+            # تحقق إضافي لضمان عدم تكرار النقطة لنفس الشخص إذا ضغط مرتين
+            cursor.execute("SELECT referred_by FROM users WHERE user_id = ?", (user_id,))
+            current_ref_status = cursor.fetchone()
+            
+            if current_ref_status and current_ref_status[0] == referred_by:
+                # إضافة نقطة للداعي
                 cursor.execute("UPDATE users SET points = points + 1 WHERE user_id = ?", (referred_by,))
+                # تفريغ الـ referred_by لهذا المستخدم حتى لا يتم احتسابها مرة أخرى بالغلط
+                cursor.execute("UPDATE users SET referred_by = -1 WHERE user_id = ?", (user_id,))
                 conn.commit()
+
+                # جلب لغة ورصيد الداعي لإرسال إشعار له
                 cursor.execute("SELECT lang, points FROM users WHERE user_id = ?", (referred_by,))
                 ref_data = cursor.fetchone()
                 if ref_data:
                     ref_lang, new_ref_points = ref_data
-                    notif_text = f"🎉 **New Referral!**\n\n👤 A new person joined via your link.\n💎 Your balance is now: `{new_ref_points}` pts." if ref_lang == "en" else f"🎉 **تم تسجيل دعوة جديدة!**\n\n👤 انضم شخص جديد عبر رابطك.\n💎 زاد رصيدك وأصبح: `{new_ref_points}` نقطة."
+                    notif_text = f"🎉 **New Referral!**\n\n👤 A new person joined via your link.\n💎 Your balance is now: `{new_ref_points}` pts." if ref_lang == "en" else f"🎉 **تم تسجيل دعوة جديدة!**\n\n👤 انضم شخص جديد عبر رابطك واشترك بالقنوات!\n💎 زاد رصيدك وأصبح: `{new_ref_points}` نقطة."
                     try:
                         await bot.send_message(chat_id=referred_by, text=notif_text)
                     except Exception as e:
-                        logging.error(f"Failed to send notification: {e}")
-            if user_id in pending_referrals:
-                del pending_referrals[user_id]
+                        logging.error(f"Failed to send referral notification: {e}")
 
         conn.close()
         await callback.message.edit_text(t["welcome"], reply_markup=get_main_keyboard(lang))
@@ -449,9 +454,9 @@ async def earn_points_menu(callback: types.CallbackQuery):
 
     t = texts[lang]
     if lang == "ar":
-        text = f"💎 **طريقة تجميع النقاط (دعوة الأصدقاء):**\n\nقم بمشاركة رابط الدعوة الخاص بك مع أصدقائك أو في المجموعات.\nلكل شخص جديد يدخل البوت عبر رابطك، ستحصل أنت على **1 نقطة** فوراً!\n\n🔗 رابطك الخاص:\n`{ref_link}`"
+        text = f"💎 **طريقة تجميع النقاط (دعوة الأصدقاء):**\n\nقم بمشاركة رابط الدعوة الخاص بك مع أصدقائك أو في المجموعات.\nلكل شخص جديد يدخل البوت عبر رابطك ويشترك بالقنوات، ستحصل أنت على **1 نقطة** فوراً!\n\n🔗 رابطك الخاص:\n`{ref_link}`"
     else:
-        text = f"💎 **How to earn points (Invite Friends):**\n\nShare your referral link with friends or groups.\nFor every new person who joins via your link, you will get **1 point** instantly!\n\n🔗 Your link:\n`{ref_link}`"
+        text = f"💎 **How to earn points (Invite Friends):**\n\nShare your referral link with friends or groups.\nFor every new person who joins via your link and subscribes, you will get **1 point** instantly!\n\n🔗 Your link:\n`{ref_link}`"
 
     share_text = "🔥 احصل على حسابات ألعاب قوية مجاناً عبر الانضمام لهذا المتجر المميز:" if lang == "ar" else "🔥 Get free game accounts by joining this awesome store:"
     share_url = f"https://t.me/share/url?url={ref_link}&text={share_text}"
@@ -704,79 +709,7 @@ async def show_my_purchases(callback: types.CallbackQuery):
     builder.row(InlineKeyboardButton(text=t["btn_back"], callback_data="main_menu"))
     await callback.message.edit_text(text, reply_markup=builder.as_markup())
 
-@dp.callback_query(F.data.startswith("start_chat_"))
-async def start_chat_with_user(callback: types.CallbackQuery):
-    if callback.from_user.id != ADMIN_ID:
-        return
-    try:
-        target_user_id = int(callback.data.replace("start_chat_", ""))
-    except ValueError:
-        return
-
-    conn = sqlite3.connect("store_bot.db")
-    cursor = conn.cursor()
-    cursor.execute("INSERT OR REPLACE INTO admin_chat (admin_id, active_target_user_id) VALUES (?, ?)", (ADMIN_ID, target_user_id))
-    conn.commit()
-    conn.close()
-
-    await callback.answer("✅ تم فتح الشات المباشر!", show_alert=True)
-    builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="❌ إنهاء الشات المباشر", callback_data="end_chat_admin"))
-    await callback.message.answer(f"🟢 **تم ربط شات البوت لديك بالعميل (`{target_user_id}`).**\nأي رسالة تكتبها هنا الآن سترسل فوراً إلى شات العميل الخاص بالبوت.\nلإغلاق الشات أرسل `/end` أو اضغط الزر أدناه:", reply_markup=builder.as_markup())
-
-@dp.callback_query(F.data == "end_chat_admin")
-async def end_chat_callback(callback: types.CallbackQuery):
-    if callback.from_user.id != ADMIN_ID:
-        return
-    conn = sqlite3.connect("store_bot.db")
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM admin_chat WHERE admin_id = ?", (ADMIN_ID,))
-    conn.commit()
-    conn.close()
-    await callback.answer("تم الإنهاء", show_alert=True)
-    await callback.message.answer("🔴 **تم إغلاق الشات المباشر.**")
-
-@dp.message(F.text & ~F.text.startswith("/"))
-async def handle_user_messages(message: types.Message):
-    user_id = message.from_user.id
-    
-    # إذا كنت أنت المدير وترسل رسالة بالبوت
-    if user_id == ADMIN_ID:
-        conn = sqlite3.connect("store_bot.db")
-        cursor = conn.cursor()
-        cursor.execute("SELECT active_target_user_id FROM admin_chat WHERE admin_id = ?", (ADMIN_ID,))
-        row = cursor.fetchone()
-        conn.close()
-
-        if row and row[0]:
-            target_user_id = row[0]
-            try:
-                await bot.send_message(chat_id=target_user_id, text=f"{message.text}")
-                await message.react([types.ReactionTypeEmoji(emoji="👍")])
-            except Exception as e:
-                await message.answer(f"❌ فشل الإرسال للعميل: {e}")
-        return
-
-    # إذا أرسل أي مستخدم رسالة (مناسبة جداً للمسابقات أو الاستفسارات)
-    forward_text = (
-        f"🚨 **رسالة جديدة للمسابقة / الاستفسار:**\n\n"
-        f"👤 الاسم: {message.from_user.full_name}\n"
-        f"🆔 الآيدي: `{user_id}`\n\n"
-        f"💬 الرسالة:\n{message.text}"
-    )
-
-    builder = InlineKeyboardBuilder()
-    # هذا الزر يحولك مباشرة للشات الخاص معه في البوت بنقرة واحدة
-    builder.row(InlineKeyboardButton(text="💬 تواصل معه بشات البوت", callback_data=f"start_chat_{user_id}"))
-
-    try:
-        await bot.send_message(ADMIN_ID, forward_text, reply_markup=builder.as_markup(), parse_mode="Markdown")
-        await message.answer("✅ تم إرسال رسالتك إلى إدارة المتجر بنجاح.")
-    except Exception as e:
-        logging.error(f"Failed to forward message to admin: {e}")
-
 async def main():
-    await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
