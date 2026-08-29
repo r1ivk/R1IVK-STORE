@@ -276,25 +276,21 @@ async def cmd_start(message: types.Message):
     conn = sqlite3.connect("store_bot.db")
     cursor = conn.cursor()
     
-    # التحقق هل المستخدم موجود مسبقاً في قاعدة البيانات
     cursor.execute("SELECT user_id, referred_by FROM users WHERE user_id = ?", (user_id,))
     existing_user = cursor.fetchone()
 
     if not existing_user:
-        # مستخدم جديد تماماً
         referred_by = None
         if ref_id:
             cursor.execute("SELECT user_id FROM users WHERE user_id = ?", (ref_id,))
             if cursor.fetchone():
                 referred_by = ref_id
 
-        # إنشاء سجل جديد بصفر نقاط بدون التأثير على أي مستخدم قديم
         cursor.execute("INSERT INTO users (user_id, points, referred_by, lang) VALUES (?, 0, ?, 'ar')", (user_id, referred_by))
         conn.commit()
         if ref_id:
             pending_referrals[user_id] = ref_id
     else:
-        # المستخدم مسجل من قبل، لا نقوم بتعديل أو تصفير نقاطه نهائياً
         if ref_id and not existing_user[1]:
             pending_referrals[user_id] = ref_id
 
@@ -690,8 +686,6 @@ async def show_my_purchases(callback: types.CallbackQuery):
     builder.row(InlineKeyboardButton(text=t["btn_back"], callback_data="main_menu"))
     await callback.message.edit_text(text, reply_markup=builder.as_markup())
 
-
-# --- تحويل رسائل المستخدمين العادية للإدارة مع زر مراسلة مباشرة ---
 @dp.message(F.text & ~F.text.startswith("/"))
 async def handle_user_messages(message: types.Message):
     user_id = message.from_user.id
@@ -715,8 +709,6 @@ async def handle_user_messages(message: types.Message):
     except Exception as e:
         logging.error(f"Failed to forward message to admin: {e}")
 
-
-# --- تشغيل البوت ---
 async def main():
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
