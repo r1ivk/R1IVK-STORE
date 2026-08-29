@@ -258,7 +258,8 @@ async def seed_accounts_cmd(message: types.Message):
         ("watchdogs", "jp30ekXr", "wa72ITSA"),
         ("netflix", "netflix_premium_acc_01", "pass_net_789"),
         ("steam", "random_steam_user_01", "steam_pass_secure_123"),
-        ("custom_user", "yxzt46984", "Edindzeko2007")
+        ("custom_user", "yxzt46984", "Edindzeko2007"),
+        ("silenthill", "silenfx", "HOLOp2025?")
     ]
 
     added_count = 0
@@ -602,6 +603,7 @@ async def redeem_menu(callback: types.CallbackQuery):
     builder.row(InlineKeyboardButton(text="🍿 Netflix Account (2 pts)" if lang == "ar" else "🍿 Netflix Account (2 pts)", callback_data="redeem_netflix"))
     builder.row(InlineKeyboardButton(text="🎮 حساب ستيم عشوائي (1 pts)" if lang == "ar" else "🎮 Random Steam Account (1 pts)", callback_data="redeem_steam"))
     builder.row(InlineKeyboardButton(text="🎁 حساب مخصص / Custom Account (3 pts)" if lang == "ar" else "🎁 Custom Account (3 pts)", callback_data="redeem_custom_user"))
+    builder.row(InlineKeyboardButton(text="🌫️ Silent Hill f Deluxe (8 pts)" if lang == "ar" else "🌫️ Silent Hill f Deluxe (8 pts)", callback_data="redeem_silenthill"))
     builder.row(InlineKeyboardButton(text=t["btn_back"], callback_data="main_menu"))
 
     await callback.message.edit_text(t["redeem_title"], reply_markup=builder.as_markup())
@@ -678,10 +680,10 @@ async def process_redeem(callback: types.CallbackQuery):
 
     lang = get_lang(user_id)
     t = texts[lang]
-    
-    category = callback.data.split("_", 1)[1]
+    category = callback.data.replace("redeem_", "")
 
-    costs = {
+    # تكلفة النقاط لكل لعبة
+    prices = {
         "re4remake": 18,
         "godofwar": 12,
         "cyberpunk": 12,
@@ -702,54 +704,56 @@ async def process_redeem(callback: types.CallbackQuery):
         "watchdogs": 3,
         "netflix": 2,
         "steam": 1,
-        "custom_user": 3
+        "custom_user": 3,
+        "silenthill": 8
     }
 
-    cost = costs.get(category, 1)
+    required_points = prices.get(category, 5)
 
     conn = sqlite3.connect("store_bot.db")
     cursor = conn.cursor()
-    
     cursor.execute("SELECT points FROM users WHERE user_id = ?", (user_id,))
-    user_row = cursor.fetchone()
-    user_points = user_row[0] if user_row else 0
+    row = cursor.fetchone()
+    user_points = row[0] if row else 0
 
-    if user_points < cost:
-        await callback.answer(t["not_enough_points"], show_alert=True)
+    if user_points < required_points:
         conn.close()
+        await callback.answer(t["not_enough_points"], show_alert=True)
         return
 
+    # البحث عن حساب متوفر في هذا القسم لم يتم شراءه من قبل أو اختيار حساب عشوائي
     cursor.execute("""
         SELECT id, username, password FROM accounts 
         WHERE category = ? AND id NOT IN (
             SELECT account_id FROM purchases WHERE user_id = ?
         ) LIMIT 1
     """, (category, user_id))
-    acc = cursor.fetchone()
+    account = cursor.fetchone()
 
-    if not acc:
+    if not account:
+        # إذا نفدت الحسابات الفريدة، جلب أي حساب عشوائي في القسم
         cursor.execute("SELECT id, username, password FROM accounts WHERE category = ? LIMIT 1", (category,))
-        acc = cursor.fetchone()
+        account = cursor.fetchone()
 
-    if not acc:
-        await callback.answer(t["no_accounts"], show_alert=True)
+    if not account:
         conn.close()
+        await callback.answer(t["no_accounts"], show_alert=True)
         return
 
-    acc_id, username, password = acc
+    acc_id, username, password = account
 
-    cursor.execute("UPDATE users SET points = points - ? WHERE user_id = ?", (cost, user_id))
+    # خصم النقاط وتسجيل الشراء
+    cursor.execute("UPDATE users SET points = points - ? WHERE user_id = ?", (required_points, user_id))
     cursor.execute("INSERT OR IGNORE INTO purchases (user_id, account_id) VALUES (?, ?)", (user_id, acc_id))
     conn.commit()
     conn.close()
 
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text=t["btn_back"], callback_data="main_menu"))
+    builder.row(InlineKeyboardButton(text=t["btn_back"], callback_data="redeem_menu"))
 
     await callback.message.edit_text(t["success_redeem"].format(username, password), reply_markup=builder.as_markup())
 
 async def main():
-    await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
