@@ -189,7 +189,6 @@ async def add_admin_points(message: types.Message):
 
     await message.answer(f"💎 تمت إضافة `{amount}` نقطة إلى رصيدك بنجاح!\n💰 رصيدك الحالي: `{new_points}` نقطة.")
 
-# --- أمر إعطاء النقاط الفعلي والمبرمج بدقة للمستخدمين ---
 @dp.message(Command("give"))
 async def give_points_to_user(message: types.Message):
     if message.from_user.id != ADMIN_ID:
@@ -206,7 +205,6 @@ async def give_points_to_user(message: types.Message):
     conn = sqlite3.connect("store_bot.db")
     cursor = conn.cursor()
     
-    # التحقق من وجود المستخدم في قاعدة البيانات أو إنشاء سجل له إن لم يكن مسجلاً
     cursor.execute("SELECT points FROM users WHERE user_id = ?", (target_user_id,))
     user = cursor.fetchone()
 
@@ -221,10 +219,8 @@ async def give_points_to_user(message: types.Message):
     conn.commit()
     conn.close()
 
-    # تأكيد نجاح العملية للمدير
     await message.answer(f"✅ تمت إضافة `{points_to_give}` نقطة للمستخدم `{target_user_id}` بنجاح!\n💰 رصيده الحالي: `{new_balance}` نقطة.")
     
-    # إرسال إشعار تلقائي للمستخدم بأن رصيده قد تم شحنه
     try:
         await bot.send_message(
             chat_id=target_user_id,
@@ -249,9 +245,8 @@ async def seed_accounts_cmd(message: types.Message):
         ("rdr2", "followinghoverfly3787", "f-r-e-e-akk-tg:@hyznet"),
         ("fifa26", "svfwqhmr6zrth7rj", "Ivancito2009_"),
         ("thelastofus", "thelast1q", "playerok.com/profile/QAVIX"),
-        ("spiderman1", "sp1_remastered_user", "pass_sp1_2026"),
+        ("spiderman_all", "hamorilal", "Gk6q63F1"),
         ("miles", "jayderr20", "N2DddawdUKtF2"),
-        ("spiderman2", "sp2_by_heero", "https://t.me/steamaccountsog"),
         ("forza", "duhl15773", "Muhammadknio12!"),
         ("tsushima", "MythicStore_GOT_01", "https://t.me/Steam_Family"),
         ("batman", "batman_arkham_trilogy_user", "pass_arkham_123"),
@@ -584,26 +579,25 @@ async def redeem_menu(callback: types.CallbackQuery):
     t = texts[lang]
 
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="🔥 Resident Evil 4 Remake + 30 AAA Games (18 pts)", callback_data="redeem_re4remake"))
-    builder.row(InlineKeyboardButton(text="🪓 God of War (2018) + Ragnarok (12 pts)", callback_data="redeem_godofwar"))
-    builder.row(InlineKeyboardButton(text="🤖 Cyberpunk 2077 (12 pts)", callback_data="redeem_cyberpunk"))
-    builder.row(InlineKeyboardButton(text="🧟 Resident Evil Requiem (10 pts)", callback_data="redeem_requiem"))
-    builder.row(InlineKeyboardButton(text="🤠 Red Dead Redemption 2 (6 pts)", callback_data="redeem_rdr2"))
-    builder.row(InlineKeyboardButton(text="⚽ FC 26 / FIFA 26 (6 pts)", callback_data="redeem_fifa26"))
-    builder.row(InlineKeyboardButton(text="🌿 The Last of Us Part I & II (6 pts)", callback_data="redeem_thelastofus"))
-    builder.row(InlineKeyboardButton(text="🕷️ Spider-Man Remastered (6 pts)", callback_data="redeem_spiderman1"))
-    builder.row(InlineKeyboardButton(text="🕷️ Spider-Man: Miles Morales (6 pts)", callback_data="redeem_miles"))
-    builder.row(InlineKeyboardButton(text="🕷️ Spider-Man 2 (6 pts)", callback_data="redeem_spiderman2"))
-    builder.row(InlineKeyboardButton(text="🏎️ Forza Horizon 6 (6 pts)", callback_data="redeem_forza"))
-    builder.row(InlineKeyboardButton(text="🗡️ Ghost of Tsushima (Gold Edition) (6 pts)", callback_data="redeem_tsushima"))
-    builder.row(InlineKeyboardButton(text="🦇 Batman Arkham Trilogy (6 pts)", callback_data="redeem_batman"))
-    builder.row(InlineKeyboardButton(text="🌀 Naruto Shippuden: Ultimate Ninja Storm (6 pts)", callback_data="redeem_naruto"))
-    builder.row(InlineKeyboardButton(text="🐀 A Plague Tale: Innocence (Part 1) (6 pts)", callback_data="redeem_plague1"))
-    builder.row(InlineKeyboardButton(text="🐀 A Plague Tale: Requiem (Part 2) (6 pts)", callback_data="redeem_plague2"))
-    builder.row(InlineKeyboardButton(text="🏎️ GTA V Account (4 pts)", callback_data="redeem_gta"))
-    builder.row(InlineKeyboardButton(text="💻 Watch Dogs (3 pts)", callback_data="redeem_watchdogs"))
-    builder.row(InlineKeyboardButton(text="🍿 Netflix Account (2 pts)", callback_data="redeem_netflix"))
-    builder.row(InlineKeyboardButton(text="🎮 حساب ستيم عشوائي (1 pts)", callback_data="redeem_steam"))
+    builder.row(InlineKeyboardButton(text="🔥 Resident Evil 4 Remake + 30 AAA Games (18 pts)" if lang == "ar" else "🔥 Resident Evil 4 Remake + 30 AAA Games (18 pts)", callback_data="redeem_re4remake"))
+    builder.row(InlineKeyboardButton(text="🪓 God of War (2018) + Ragnarok (12 pts)" if lang == "ar" else "🪓 God of War (2018) + Ragnarok (12 pts)", callback_data="redeem_godofwar"))
+    builder.row(InlineKeyboardButton(text="🤖 Cyberpunk 2077 (12 pts)" if lang == "ar" else "🤖 Cyberpunk 2077 (12 pts)", callback_data="redeem_cyberpunk"))
+    builder.row(InlineKeyboardButton(text="🧟 Resident Evil Requiem (10 pts)" if lang == "ar" else "🧟 Resident Evil Requiem (10 pts)", callback_data="redeem_requiem"))
+    builder.row(InlineKeyboardButton(text="🤠 Red Dead Redemption 2 (6 pts)" if lang == "ar" else "🤠 Red Dead Redemption 2 (6 pts)", callback_data="redeem_rdr2"))
+    builder.row(InlineKeyboardButton(text="⚽ FC 26 / FIFA 26 (6 pts)" if lang == "ar" else "⚽ FC 26 / FIFA 26 (6 pts)", callback_data="redeem_fifa26"))
+    builder.row(InlineKeyboardButton(text="🌿 The Last of Us Part I & II (6 pts)" if lang == "ar" else "🌿 The Last of Us Part I & II (6 pts)", callback_data="redeem_thelastofus"))
+    builder.row(InlineKeyboardButton(text="🕷️ جميع اجزاء سبايدر مان 1 2 3 (10 pts)" if lang == "ar" else "🕷️ All Spider-Man Parts 1 2 3 (10 pts)", callback_data="redeem_spiderman_all"))
+    builder.row(InlineKeyboardButton(text="🕷️ Spider-Man: Miles Morales (6 pts)" if lang == "ar" else "🕷️ Spider-Man: Miles Morales (6 pts)", callback_data="redeem_miles"))
+    builder.row(InlineKeyboardButton(text="🏎️ Forza Horizon 6 (6 pts)" if lang == "ar" else "🏎️ Forza Horizon 6 (6 pts)", callback_data="redeem_forza"))
+    builder.row(InlineKeyboardButton(text="🗡️ Ghost of Tsushima (Gold Edition) (6 pts)" if lang == "ar" else "🗡️ Ghost of Tsushima (Gold Edition) (6 pts)", callback_data="redeem_tsushima"))
+    builder.row(InlineKeyboardButton(text="🦇 Batman Arkham Trilogy (6 pts)" if lang == "ar" else "🦇 Batman Arkham Trilogy (6 pts)", callback_data="redeem_batman"))
+    builder.row(InlineKeyboardButton(text="🌀 Naruto Shippuden: Ultimate Ninja Storm (6 pts)" if lang == "ar" else "🌀 Naruto Shippuden: Ultimate Ninja Storm (6 pts)", callback_data="redeem_naruto"))
+    builder.row(InlineKeyboardButton(text="🐀 A Plague Tale: Innocence (Part 1) (6 pts)" if lang == "ar" else "🐀 A Plague Tale: Innocence (Part 1) (6 pts)", callback_data="redeem_plague1"))
+    builder.row(InlineKeyboardButton(text="🐀 A Plague Tale: Requiem (Part 2) (6 pts)" if lang == "ar" else "🐀 A Plague Tale: Requiem (Part 2) (6 pts)", callback_data="redeem_plague2"))
+    builder.row(InlineKeyboardButton(text="🏎️ GTA V Account (4 pts)" if lang == "ar" else "🏎️ GTA V Account (4 pts)", callback_data="redeem_gta"))
+    builder.row(InlineKeyboardButton(text="💻 Watch Dogs (3 pts)" if lang == "ar" else "💻 Watch Dogs (3 pts)", callback_data="redeem_watchdogs"))
+    builder.row(InlineKeyboardButton(text="🍿 Netflix Account (2 pts)" if lang == "ar" else "🍿 Netflix Account (2 pts)", callback_data="redeem_netflix"))
+    builder.row(InlineKeyboardButton(text="🎮 حساب ستيم عشوائي (1 pts)" if lang == "ar" else "🎮 Random Steam Account (1 pts)", callback_data="redeem_steam"))
     builder.row(InlineKeyboardButton(text=t["btn_back"], callback_data="main_menu"))
 
     await callback.message.edit_text(t["redeem_title"], reply_markup=builder.as_markup())
@@ -691,9 +685,8 @@ async def process_redeem(callback: types.CallbackQuery):
         "rdr2": 6,
         "fifa26": 6,
         "thelastofus": 6,
-        "spiderman1": 6,
+        "spiderman_all": 10,
         "miles": 6,
-        "spiderman2": 6,
         "forza": 6,
         "tsushima": 6,
         "batman": 6,
@@ -749,38 +742,6 @@ async def process_redeem(callback: types.CallbackQuery):
 
     await callback.message.edit_text(t["success_redeem"].format(username, password), reply_markup=builder.as_markup())
 
-
-# --- تحويل رسائل المستخدمين العادية للإدارة مع زر مراسلة مباشر بالآيدي ---
-@dp.message(F.text & ~F.text.startswith("/"))
-async def forward_user_messages_to_admin(message: types.Message):
-    if message.from_user.id == ADMIN_ID:
-        return
-    
-    user = message.from_user
-    name = user.full_name
-    username = f"@{user.username}" if user.username else "لا يوجد معرف"
-    user_id = user.id
-    text = message.text
-
-    admin_msg = (
-        f"📩 **رسالة جديدة من مستخدم:**\n\n"
-        f"👤 الاسم: {name}\n"
-        f"🏷️ المعرف: {username}\n"
-        f"🆔 الآيدي: `{user_id}`\n\n"
-        f"💬 النص:\n{text}"
-    )
-
-    # إضافة زر مباشر يفتح محادثة العضو فوراً بناءً على الـ ID الخاص به
-    builder = InlineKeyboardBuilder()
-    builder.row(types.InlineKeyboardButton(text="💬 مراسلة المستخدم", url=f"tg://user?id={user_id}"))
-
-    try:
-        await bot.send_message(chat_id=ADMIN_ID, text=admin_msg, reply_markup=builder.as_markup())
-    except Exception as e:
-        logging.error(f"Failed to forward message to admin: {e}")
-
-
-# --- تشغيل البوت ---
 async def main():
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
