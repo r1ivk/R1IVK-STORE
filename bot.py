@@ -89,7 +89,7 @@ texts = {
         "redeem_title": "🎁 **قسم استبدال الحسابات (متاحة للجميع بشكل دائم):**\n\nاختر نوع الحساب الذي تريد استبداله بنقاطك:",
         "my_purchases_title": "📁 **حساباتك المشراة (متاحة لك للأبد):**\n\nاضغط على الحساب لعرض بياناته متى شئت بدون خصم أي نقاط:",
         "no_purchases": "❌ لم تقم بشراء أي حسابات حتى الآن.",
-        "no_accounts": "❌ عذراً، لا توجد حسابات متاحة حالياً في هذا القسم.",
+        "no_accounts": "❌ عذراً، لا توجد حسابات متاحة حالياً في هذا القسم (تم استهلاك جميع الحسابات المتاحة).",
         "not_enough_points": "⚠️ نقاطك غير كافية! يلزمك المزيد من النقاط لفتح هذا الحساب.",
         "success_redeem": "🎉 **مبروك! تم شراء الحساب بنجاح:**\n\n👤 **اسم المستخدم (Username):** `{}`\n🔑 **كلمة المرور (Password):**\n`{}`\n\n*(تم حفظ الحساب في سجلك للأبد)*",
         "success_reaccess": "🔓 **إليك بيانات الحساب (مشتري مسبقاً):**\n\n👤 **اسم المستخدم (Username):** `{}`\n🔑 **كلمة المرور (Password):**\n`{}`",
@@ -254,7 +254,7 @@ async def seed_accounts_cmd(message: types.Message):
         ("naruto", "naruto_storm_series_pc", "pass_naruto_storm_99"),
         ("plague1", "aplaguetale_innocence_pc", "pass_plague_innocence_1"),
         ("plague2", "aplaguetale_requiem_pc", "pass_plague_requiem_2"),
-        ("gta", "hedpy459961", "gta_secure_pass_88"),
+        ("gta", "nutritiousasp8357", "c5df4230de97f2411!aZ"),
         ("watchdogs", "jp30ekXr", "wa72ITSA"),
         ("netflix", "netflix_premium_acc_01", "pass_net_789"),
         ("steam", "random_steam_user_01", "steam_pass_secure_123"),
@@ -608,6 +608,101 @@ async def redeem_menu(callback: types.CallbackQuery):
 
     await callback.message.edit_text(t["redeem_title"], reply_markup=builder.as_markup())
 
+# --- دالة معالجة شراء واستبدال الحسابات ---
+@dp.callback_query(F.data.startswith("redeem_"))
+async def process_redeem(callback: types.CallbackQuery):
+    await callback.answer()
+    user_id = callback.from_user.id
+    if not await check_subscription(user_id):
+        return
+
+    lang = get_lang(user_id)
+    t = texts[lang]
+    category = callback.data.replace("redeem_", "", 1)
+
+    costs = {
+        "re4remake": 18,
+        "godofwar": 12,
+        "cyberpunk": 12,
+        "requiem": 10,
+        "rdr2": 6,
+        "fifa26": 6,
+        "thelastofus": 6,
+        "spiderman_all": 10,
+        "miles": 6,
+        "forza": 6,
+        "forza5": 6,
+        "tsushima": 6,
+        "batman": 6,
+        "naruto": 6,
+        "plague1": 6,
+        "plague2": 6,
+        "gta": 4,
+        "watchdogs": 3,
+        "netflix": 2,
+        "steam": 1,
+        "custom_user": 3,
+        "silenthill": 8
+    }
+
+    required_points = costs.get(category, 5)
+
+    conn = sqlite3.connect("store_bot.db")
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT points FROM users WHERE user_id = ?", (user_id,))
+    user_row = cursor.fetchone()
+    user_points = user_row[0] if user_row else 0
+
+    if user_points < required_points:
+        conn.close()
+        await callback.answer(t["not_enough_points"], show_alert=True)
+        return
+
+    # النظام يتيح تكرار الحسابات إذا نفدت (ليمتد)، بحيث يتم اختيار حساب متاح أو إعادة إتاحتها
+    cursor.execute("""
+        SELECT id, username, password FROM accounts 
+        WHERE category = ? AND id NOT IN (SELECT account_id FROM purchases WHERE user_id = ?)
+        LIMIT 1
+    """, (category, user_id))
+    account = cursor.fetchone()
+
+    # إذا اشتريت كل الحسابات المتاحة سابقاً، يسمح النظام بأخذ حساب جديد غير مكرر لنفس المستخدم إذا وجد، وإلا نأخذ أي حساب من نفس الفئة
+    if not account:
+        cursor.execute("""
+            SELECT id, username, password FROM accounts 
+            WHERE category = ?
+            LIMIT 1
+        """, (category,))
+        account = cursor.fetchone()
+
+    if not account:
+        conn.close()
+        await callback.answer(t["no_accounts"], show_alert=True)
+        return
+
+    acc_id, username, password = account
+
+    try:
+        cursor.execute("BEGIN IMMEDIATE")
+        cursor.execute("UPDATE users SET points = points - ? WHERE user_id = ?", (required_points, user_id))
+        cursor.execute("INSERT OR IGNORE INTO purchases (user_id, account_id) VALUES (?, ?)", (user_id, acc_id))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        logging.error(f"Error during purchase transaction: {e}")
+        await callback.answer("❌ حدث خطأ ما، يرجى المحاولة لاحقاً.", show_alert=True)
+        return
+    finally:
+        conn.close()
+
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text=t["btn_back"], callback_data="redeem_menu"))
+
+    success_msg = t["success_redeem"].format(username, password)
+    await callback.message.edit_text(success_msg, reply_markup=builder.as_markup())
+
 @dp.callback_query(F.data == "my_purchases")
 async def my_purchases_menu(callback: types.CallbackQuery):
     await callback.answer()
@@ -650,7 +745,10 @@ async def show_my_account(callback: types.CallbackQuery):
 
     lang = get_lang(user_id)
     t = texts[lang]
-    acc_id = int(callback.data.split("_")[3])
+    try:
+        acc_id = int(callback.data.split("_")[3])
+    except (ValueError, IndexError):
+        return
 
     conn = sqlite3.connect("store_bot.db")
     cursor = conn.cursor()
@@ -671,87 +769,6 @@ async def show_my_account(callback: types.CallbackQuery):
 
     username, password = acc
     await callback.message.edit_text(t["success_reaccess"].format(username, password), reply_markup=builder.as_markup())
-
-@dp.callback_query(F.data.startswith("redeem_"))
-async def process_redeem(callback: types.CallbackQuery):
-    user_id = callback.from_user.id
-    if not await check_subscription(user_id):
-        return
-
-    lang = get_lang(user_id)
-    t = texts[lang]
-    category = callback.data.replace("redeem_", "")
-
-    # تكلفة النقاط لكل لعبة
-    prices = {
-        "re4remake": 18,
-        "godofwar": 12,
-        "cyberpunk": 12,
-        "requiem": 10,
-        "rdr2": 6,
-        "fifa26": 6,
-        "thelastofus": 6,
-        "spiderman_all": 10,
-        "miles": 6,
-        "forza": 6,
-        "forza5": 6,
-        "tsushima": 6,
-        "batman": 6,
-        "naruto": 6,
-        "plague1": 6,
-        "plague2": 6,
-        "gta": 4,
-        "watchdogs": 3,
-        "netflix": 2,
-        "steam": 1,
-        "custom_user": 3,
-        "silenthill": 8
-    }
-
-    required_points = prices.get(category, 5)
-
-    conn = sqlite3.connect("store_bot.db")
-    cursor = conn.cursor()
-    cursor.execute("SELECT points FROM users WHERE user_id = ?", (user_id,))
-    row = cursor.fetchone()
-    user_points = row[0] if row else 0
-
-    if user_points < required_points:
-        conn.close()
-        await callback.answer(t["not_enough_points"], show_alert=True)
-        return
-
-    # البحث عن حساب متوفر في هذا القسم لم يتم شراءه من قبل أو اختيار حساب عشوائي
-    cursor.execute("""
-        SELECT id, username, password FROM accounts 
-        WHERE category = ? AND id NOT IN (
-            SELECT account_id FROM purchases WHERE user_id = ?
-        ) LIMIT 1
-    """, (category, user_id))
-    account = cursor.fetchone()
-
-    if not account:
-        # إذا نفدت الحسابات الفريدة، جلب أي حساب عشوائي في القسم
-        cursor.execute("SELECT id, username, password FROM accounts WHERE category = ? LIMIT 1", (category,))
-        account = cursor.fetchone()
-
-    if not account:
-        conn.close()
-        await callback.answer(t["no_accounts"], show_alert=True)
-        return
-
-    acc_id, username, password = account
-
-    # خصم النقاط وتسجيل الشراء
-    cursor.execute("UPDATE users SET points = points - ? WHERE user_id = ?", (required_points, user_id))
-    cursor.execute("INSERT OR IGNORE INTO purchases (user_id, account_id) VALUES (?, ?)", (user_id, acc_id))
-    conn.commit()
-    conn.close()
-
-    builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text=t["btn_back"], callback_data="redeem_menu"))
-
-    await callback.message.edit_text(t["success_redeem"].format(username, password), reply_markup=builder.as_markup())
 
 async def main():
     await dp.start_polling(bot)
