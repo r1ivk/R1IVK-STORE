@@ -275,20 +275,29 @@ async def cmd_start(message: types.Message):
 
     conn = sqlite3.connect("store_bot.db")
     cursor = conn.cursor()
-    cursor.execute("SELECT lang, points, referred_by FROM users WHERE user_id = ?", (user_id,))
-    user = cursor.fetchone()
+    
+    # التحقق هل المستخدم موجود مسبقاً في قاعدة البيانات
+    cursor.execute("SELECT user_id, referred_by FROM users WHERE user_id = ?", (user_id,))
+    existing_user = cursor.fetchone()
 
-    if not user:
+    if not existing_user:
+        # مستخدم جديد تماماً
         referred_by = None
         if ref_id:
             cursor.execute("SELECT user_id FROM users WHERE user_id = ?", (ref_id,))
             if cursor.fetchone():
                 referred_by = ref_id
 
+        # إنشاء سجل جديد بصفر نقاط بدون التأثير على أي مستخدم قديم
         cursor.execute("INSERT INTO users (user_id, points, referred_by, lang) VALUES (?, 0, ?, 'ar')", (user_id, referred_by))
         conn.commit()
         if ref_id:
             pending_referrals[user_id] = ref_id
+    else:
+        # المستخدم مسجل من قبل، لا نقوم بتعديل أو تصفير نقاطه نهائياً
+        if ref_id and not existing_user[1]:
+            pending_referrals[user_id] = ref_id
+
     conn.close()
 
     if not await check_subscription(user_id):
@@ -385,7 +394,8 @@ async def show_account_info(callback: types.CallbackQuery):
     conn = sqlite3.connect("store_bot.db")
     cursor = conn.cursor()
     cursor.execute("SELECT points FROM users WHERE user_id = ?", (user_id,))
-    points = cursor.fetchone()[0]
+    points_row = cursor.fetchone()
+    points = points_row[0] if points_row else 0
     conn.close()
 
     bot_info = await bot.get_me()
@@ -681,16 +691,14 @@ async def show_my_purchases(callback: types.CallbackQuery):
     await callback.message.edit_text(text, reply_markup=builder.as_markup())
 
 
-# --- ميزة استقبال وتحويل رسائل المستخدمين العادية إليك مع زر "مراسلة مباشرة" ---
+# --- تحويل رسائل المستخدمين العادية للإدارة مع زر مراسلة مباشرة ---
 @dp.message(F.text & ~F.text.startswith("/"))
 async def handle_user_messages(message: types.Message):
     user_id = message.from_user.id
     
-    # إذا كنت أنت (المدير) من يرسل رسالة في البوت، فلا تفعل شيئاً
     if user_id == ADMIN_ID:
         return
 
-    # صياغة رسالة التنبيه التي ستصلك
     forward_text = (
         f"📩 **رسالة جديدة من عميل / مستخدم:**\n\n"
         f"👤 الاسم: {message.from_user.full_name}\n"
@@ -698,14 +706,11 @@ async def handle_user_messages(message: types.Message):
         f"💬 النص:\n{message.text}"
     )
 
-    # إنشاء زر مباشر يفتح محادثة خاصة مع المستخدم بنقرة واحدة
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="💬 مراسلة المستخدم (خاص)", url=f"tg://user?id={user_id}"))
 
-    # إرسال الرسالة إلى حسابك الشخصي (ADMIN_ID)
     try:
         await bot.send_message(ADMIN_ID, forward_text, reply_markup=builder.as_markup(), parse_mode="Markdown")
-        # إرسال إشعار بسيط للمستخدم بأن رسالته وصلت للإدارة
         await message.answer("✅ تم إرسال رسالتك إلى إدارة المتجر بنجاح، سيتم الرد عليك قريباً.")
     except Exception as e:
         logging.error(f"Failed to forward message to admin: {e}")
