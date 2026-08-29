@@ -9,8 +9,6 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 # --- إعدادات البوت والمدير ---
 API_TOKEN = "8948074959:AAG5_PFOSO-pzNrZENuowrWA3HtdMyeIGfo"
 ADMIN_ID = 6266959915
-SUPPORT_USERNAME = "@r1ivlk"
-
 REQUIRED_CHANNELS = ["@r1iv_k"]
 
 POINT_PACKAGES = {
@@ -50,9 +48,9 @@ def init_db():
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS purchases (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
-            account_id INTEGER,
-            PRIMARY KEY (user_id, account_id)
+            account_id INTEGER
         )
     """)
 
@@ -76,23 +74,22 @@ init_db()
 # --- النصوص والترجمات ---
 texts = {
     "ar": {
-        "welcome": "أهلاً بك في متجر r1ivk Store 🎮\nاختر لغتك المفضلة أو استعرض الأقسام الجديدة من القائمة أدناه 👇.\n\n💬 **ملاحظة:** لأي استفسار أو مشكلة، أرسل رسالتك هنا وسيتم تحويلها للإدارة فوراً.",
+        "welcome": "أهلاً بك في متجر r1ivk Store 🎮\nاختر لغتك المفضلة أو استعرض الأقسام الجديدة من القائمة أدناه 👇.\n\n💬 **ملاحظة:** لأي استفسار أو مشكلة، أرسل رسالتك هنا وسأتلقاها شخصياً فوراً.",
         "lang_changed": "تم تغيير اللغة إلى العربية بنجاح! 🇸🇦",
         "btn_ref": "💎 تجميع رصيد (دعوة الأصدقاء)",
         "btn_info": "👤 معلومات حسابك",
         "btn_redeem": "🎁 استبدال النقاط (سحب حساب)",
         "btn_buy_points": "⭐ شراء نقاط بنجوم تيليجرام",
-        "buy_points_title": "⭐ **شراء النقاط:**\n\nاختر الباقة المناسبة بأسعارها الجديدة والرخيصة، وبعد تأكيد الدفع ستُضاف النقاط تلقائياً إلى رصيدك.",
+        "buy_points_title": "⭐ **شراء النقاط:**\n\nاختر الباقة المناسبة، وبعد تأكيد الدفع ستُضاف النقاط تلقائياً إلى رصيدك.",
         "btn_my_purchases": "📁 حساباتي المشراة",
         "btn_lang": "🌐 تغيير اللغة / Change Language",
         "account_info": "👤 **معلومات حسابك:**\n\n🆔 رقم المستخدم: `{}`\n💎 النقاط: `{}` نقطة\n\n🔗 رابط الدعوة الخاص بك:\n`{}`\n*(ستحصل على **1 نقطة** فوراً مقابل كل صديق جديد ينضم عبر رابطك!)*",
         "redeem_title": "🎁 **قسم استبدال الحسابات (متاحة للجميع بشكل دائم):**\n\nاختر نوع الحساب الذي تريد استبداله بنقاطك:",
         "my_purchases_title": "📁 **حساباتك المشراة (متاحة لك للأبد):**\n\nاضغط على الحساب لعرض بياناته متى شئت بدون خصم أي نقاط:",
         "no_purchases": "❌ لم تقم بشراء أي حسابات حتى الآن.",
-        "no_accounts": "❌ عذراً، لا توجد حسابات متاحة حالياً في هذا القسم (تم استهلاك جميع الحسابات المتاحة).",
+        "no_accounts": "❌ عذراً، لا توجد حسابات متاحة حالياً في هذا القسم.",
         "not_enough_points": "⚠️ نقاطك غير كافية! يلزمك المزيد من النقاط لفتح هذا الحساب.",
         "success_redeem": "🎉 **مبروك! تم شراء الحساب بنجاح:**\n\n👤 **اسم المستخدم (Username):** `{}`\n🔑 **كلمة المرور (Password):**\n`{}`\n\n*(تم حفظ الحساب في سجلك للأبد)*",
-        "success_reaccess": "🔓 **إليك بيانات الحساب (مشتري مسبقاً):**\n\n👤 **اسم المستخدم (Username):** `{}`\n🔑 **كلمة المرور (Password):**\n`{}`",
         "btn_back": "⬅️ رجوع للقائمة الرئيسية",
         "btn_share": "📤 مشاركة الرابط مع الأصدقاء",
         "sub_required": "⚠️ **عذراً، يجب عليك الاشتراك في قنوات المتجر وشات القناة أولاً لكي تتمكن من استخدام البوت!**\n\nيرجى الانضمام إليهما ثم اضغط على زر التحقق أدناه 👇",
@@ -102,13 +99,13 @@ texts = {
         "not_subscribed_yet": "❌ لم تقم بالاشتراك في جميع القنوات بعد! يرجى الاشتراك ثم حاول مجدداً."
     },
     "en": {
-        "welcome": "Welcome to r1ivk Store 🎮\nChoose your preferred language or explore the updated game sections below 👇.\n\n💬 **Note:** For any inquiry or issue, send your message here and it will be forwarded to support.",
+        "welcome": "Welcome to r1ivk Store 🎮\nChoose your preferred language or explore the updated game sections below 👇.\n\n💬 **Note:** For any inquiry or issue, send your message here and I will receive it directly.",
         "lang_changed": "Language changed to English successfully! 🇬🇧",
         "btn_ref": "💎 Earn Points (Invite Friends)",
         "btn_info": "👤 Account Info",
         "btn_redeem": "🎁 Redeem Points",
         "btn_buy_points": "⭐ Buy Points with Telegram Stars",
-        "buy_points_title": "⭐ **Buy Points:**\n\nChoose a package with new affordable prices. Points will be added automatically after payment.",
+        "buy_points_title": "⭐ **Buy Points:**\n\nChoose a package. Points will be added automatically after payment.",
         "btn_my_purchases": "📁 My Purchased Accounts",
         "btn_lang": "🌐 تغيير اللغة / Change Language",
         "account_info": "👤 **Account Info:**\n\n🆔 User ID: `{}`\n💎 Points: `{}` pts\n\n🔗 Your Referral Link:\n`{}`\n*(You will get **1 point** instantly for every new friend who joins via your link!)*",
@@ -118,7 +115,6 @@ texts = {
         "no_accounts": "❌ Sorry, no accounts are currently available in this category.",
         "not_enough_points": "⚠️ Not enough points! You need more points to redeem this account.",
         "success_redeem": "🎉 **Congratulations! Account purchased successfully:**\n\n👤 **Username:** `{}`\n🔑 **Password:**\n`{}`\n*(Saved to your profile forever)*",
-        "success_reaccess": "🔓 **Account details (Previously purchased):**\n\n👤 **Username:** `{}`\n🔑 **Password:**\n`{}`",
         "btn_back": "Main Menu",
         "btn_share": "📤 Share Link with Friends",
         "sub_required": "⚠️ **Sorry, you must subscribe to the store channels first to use this bot!**\n\nPlease join them and click the check button below 👇",
@@ -174,7 +170,6 @@ async def bot_statistics(message: types.Message):
 async def add_admin_points(message: types.Message):
     if message.from_user.id != ADMIN_ID:
         return
-    
     args = message.text.split()
     amount = int(args[1]) if len(args) > 1 and args[1].isdigit() else 100
 
@@ -186,14 +181,12 @@ async def add_admin_points(message: types.Message):
     new_points = cursor.fetchone()[0]
     conn.commit()
     conn.close()
-
     await message.answer(f"💎 تمت إضافة `{amount}` نقطة إلى رصيدك بنجاح!\n💰 رصيدك الحالي: `{new_points}` نقطة.")
 
 @dp.message(Command("give"))
 async def give_points_to_user(message: types.Message):
     if message.from_user.id != ADMIN_ID:
         return
-    
     args = message.text.split()
     if len(args) < 3 or not args[1].isdigit() or not args[2].isdigit():
         await message.answer("⚠️ الاستخدام الصحيح:\n`/give [آيدي_المستخدم] [عدد_النقاط]`", parse_mode="Markdown")
@@ -204,7 +197,6 @@ async def give_points_to_user(message: types.Message):
 
     conn = sqlite3.connect("store_bot.db")
     cursor = conn.cursor()
-    
     cursor.execute("SELECT points FROM users WHERE user_id = ?", (target_user_id,))
     user = cursor.fetchone()
 
@@ -220,20 +212,15 @@ async def give_points_to_user(message: types.Message):
     conn.close()
 
     await message.answer(f"✅ تمت إضافة `{points_to_give}` نقطة للمستخدم `{target_user_id}` بنجاح!\n💰 رصيده الحالي: `{new_balance}` نقطة.")
-    
     try:
-        await bot.send_message(
-            chat_id=target_user_id,
-            text=f"🎁 **تم شحن رصيدك! أضاف لك المدير `{points_to_give}` نقطة.**\n💰 رصيدك الحالي: `{new_balance}` نقطة."
-        )
+        await bot.send_message(chat_id=target_user_id, text=f"🎁 **تم شحن رصيدك! أضاف لك المدير `{points_to_give}` نقطة.**\n💰 رصيدك الحالي: `{new_balance}` نقطة.")
     except Exception as e:
-        logging.error(f"Failed to notify user {target_user_id} about given points: {e}")
+        logging.error(f"Failed to notify user: {e}")
 
 @dp.message(Command("add_accounts"))
 async def seed_accounts_cmd(message: types.Message):
     if message.from_user.id != ADMIN_ID:
         return
-    
     conn = sqlite3.connect("store_bot.db")
     cursor = conn.cursor()
 
@@ -348,10 +335,8 @@ async def verify_subscription(callback: types.CallbackQuery):
         if referred_by:
             cursor.execute("SELECT points FROM users WHERE user_id = ?", (referred_by,))
             if cursor.fetchone():
-                cursor.execute("SELECT COUNT(*) FROM users WHERE referred_by = ? AND user_id = ?", (referred_by, user_id))
                 cursor.execute("UPDATE users SET points = points + 1 WHERE user_id = ?", (referred_by,))
                 conn.commit()
-
                 cursor.execute("SELECT lang, points FROM users WHERE user_id = ?", (referred_by,))
                 ref_data = cursor.fetchone()
                 if ref_data:
@@ -360,8 +345,7 @@ async def verify_subscription(callback: types.CallbackQuery):
                     try:
                         await bot.send_message(chat_id=referred_by, text=notif_text)
                     except Exception as e:
-                        logging.error(f"Failed to send referral notification: {e}")
-            
+                        logging.error(f"Failed to send notification: {e}")
             if user_id in pending_referrals:
                 del pending_referrals[user_id]
 
@@ -409,7 +393,6 @@ async def show_account_info(callback: types.CallbackQuery):
 
     t = texts[lang]
     text = t["account_info"].format(user_id, points, ref_link)
-
     share_text = "🔥 احصل على حسابات ألعاب قوية مجاناً عبر الانضمام لهذا المتجر المميز:" if lang == "ar" else "🔥 Get free game accounts by joining this awesome store:"
     share_url = f"https://t.me/share/url?url={ref_link}&text={share_text}"
 
@@ -444,7 +427,7 @@ async def earn_points_menu(callback: types.CallbackQuery):
     if lang == "ar":
         text = f"💎 **طريقة تجميع النقاط (دعوة الأصدقاء):**\n\nقم بمشاركة رابط الدعوة الخاص بك مع أصدقائك أو في المجموعات.\nلكل شخص جديد يدخل البوت عبر رابطك، ستحصل أنت على **1 نقطة** فوراً!\n\n🔗 رابطك الخاص:\n`{ref_link}`"
     else:
-        text = f"💎 **How to earn points (Invite Friends):**\n\nShare your referral link with friends or in groups.\nFor every new person who joins via your link, you will get **1 point** instantly!\n\n🔗 Your link:\n`{ref_link}`"
+        text = f"💎 **How to earn points (Invite Friends):**\n\nShare your referral link with friends or groups.\nFor every new person who joins via your link, you will get **1 point** instantly!\n\n🔗 Your link:\n`{ref_link}`"
 
     share_text = "🔥 احصل على حسابات ألعاب قوية مجاناً عبر الانضمام لهذا المتجر المميز:" if lang == "ar" else "🔥 Get free game accounts by joining this awesome store:"
     share_url = f"https://t.me/share/url?url={ref_link}&text={share_text}"
@@ -582,33 +565,32 @@ async def redeem_menu(callback: types.CallbackQuery):
     t = texts[lang]
 
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="🔥 Resident Evil 4 Remake + 30 AAA Games (18 pts)" if lang == "ar" else "🔥 Resident Evil 4 Remake + 30 AAA Games (18 pts)", callback_data="redeem_re4remake"))
-    builder.row(InlineKeyboardButton(text="🪓 God of War (2018) + Ragnarok (12 pts)" if lang == "ar" else "🪓 God of War (2018) + Ragnarok (12 pts)", callback_data="redeem_godofwar"))
-    builder.row(InlineKeyboardButton(text="🤖 Cyberpunk 2077 (12 pts)" if lang == "ar" else "🤖 Cyberpunk 2077 (12 pts)", callback_data="redeem_cyberpunk"))
-    builder.row(InlineKeyboardButton(text="🧟 Resident Evil Requiem (10 pts)" if lang == "ar" else "🧟 Resident Evil Requiem (10 pts)", callback_data="redeem_requiem"))
-    builder.row(InlineKeyboardButton(text="🤠 Red Dead Redemption 2 (6 pts)" if lang == "ar" else "🤠 Red Dead Redemption 2 (6 pts)", callback_data="redeem_rdr2"))
-    builder.row(InlineKeyboardButton(text="⚽ FC 26 / FIFA 26 (6 pts)" if lang == "ar" else "⚽ FC 26 / FIFA 26 (6 pts)", callback_data="redeem_fifa26"))
-    builder.row(InlineKeyboardButton(text="🌿 The Last of Us Part I & II (6 pts)" if lang == "ar" else "🌿 The Last of Us Part I & II (6 pts)", callback_data="redeem_thelastofus"))
-    builder.row(InlineKeyboardButton(text="🕷️ جميع اجزاء سبايدر مان 1 2 3 (10 pts)" if lang == "ar" else "🕷️ All Spider-Man Parts 1 2 3 (10 pts)", callback_data="redeem_spiderman_all"))
-    builder.row(InlineKeyboardButton(text="🕷️ Spider-Man: Miles Morales (6 pts)" if lang == "ar" else "🕷️ Spider-Man: Miles Morales (6 pts)", callback_data="redeem_miles"))
-    builder.row(InlineKeyboardButton(text="🏎️ Forza Horizon 4 (6 pts)" if lang == "ar" else "🏎️ Forza Horizon 4 (6 pts)", callback_data="redeem_forza"))
-    builder.row(InlineKeyboardButton(text="🏎️ Forza Horizon 5 (6 pts)" if lang == "ar" else "🏎️ Forza Horizon 5 (6 pts)", callback_data="redeem_forza5"))
-    builder.row(InlineKeyboardButton(text="🗡️ Ghost of Tsushima (Gold Edition) (6 pts)" if lang == "ar" else "🗡️ Ghost of Tsushima (Gold Edition) (6 pts)", callback_data="redeem_tsushima"))
-    builder.row(InlineKeyboardButton(text="🦇 Batman Arkham Trilogy (6 pts)" if lang == "ar" else "🦇 Batman Arkham Trilogy (6 pts)", callback_data="redeem_batman"))
-    builder.row(InlineKeyboardButton(text="🌀 Naruto Shippuden: Ultimate Ninja Storm (6 pts)" if lang == "ar" else "🌀 Naruto Shippuden: Ultimate Ninja Storm (6 pts)", callback_data="redeem_naruto"))
-    builder.row(InlineKeyboardButton(text="🐀 A Plague Tale: Innocence (Part 1) (6 pts)" if lang == "ar" else "🐀 A Plague Tale: Innocence (Part 1) (6 pts)", callback_data="redeem_plague1"))
-    builder.row(InlineKeyboardButton(text="🐀 A Plague Tale: Requiem (Part 2) (6 pts)" if lang == "ar" else "🐀 A Plague Tale: Requiem (Part 2) (6 pts)", callback_data="redeem_plague2"))
-    builder.row(InlineKeyboardButton(text="🏎️ GTA V Account (4 pts)" if lang == "ar" else "🏎️ GTA V Account (4 pts)", callback_data="redeem_gta"))
-    builder.row(InlineKeyboardButton(text="💻 Watch Dogs (3 pts)" if lang == "ar" else "💻 Watch Dogs (3 pts)", callback_data="redeem_watchdogs"))
-    builder.row(InlineKeyboardButton(text="🍿 Netflix Account (2 pts)" if lang == "ar" else "🍿 Netflix Account (2 pts)", callback_data="redeem_netflix"))
-    builder.row(InlineKeyboardButton(text="🎮 حساب ستيم عشوائي (1 pts)" if lang == "ar" else "🎮 Random Steam Account (1 pts)", callback_data="redeem_steam"))
-    builder.row(InlineKeyboardButton(text="🎁 حساب مخصص / Custom Account (3 pts)" if lang == "ar" else "🎁 Custom Account (3 pts)", callback_data="redeem_custom_user"))
-    builder.row(InlineKeyboardButton(text="🌫️ Silent Hill f Deluxe (8 pts)" if lang == "ar" else "🌫️ Silent Hill f Deluxe (8 pts)", callback_data="redeem_silenthill"))
+    builder.row(InlineKeyboardButton(text="🔥 Resident Evil 4 Remake + 30 AAA Games (18 pts)", callback_data="redeem_re4remake"))
+    builder.row(InlineKeyboardButton(text="🪓 God of War (2018) + Ragnarok (12 pts)", callback_data="redeem_godofwar"))
+    builder.row(InlineKeyboardButton(text="🤖 Cyberpunk 2077 (12 pts)", callback_data="redeem_cyberpunk"))
+    builder.row(InlineKeyboardButton(text="🧟 Resident Evil Requiem (10 pts)", callback_data="redeem_requiem"))
+    builder.row(InlineKeyboardButton(text="🤠 Red Dead Redemption 2 (6 pts)", callback_data="redeem_rdr2"))
+    builder.row(InlineKeyboardButton(text="⚽ FC 26 / FIFA 26 (6 pts)", callback_data="redeem_fifa26"))
+    builder.row(InlineKeyboardButton(text="🌿 The Last of Us Part I & II (6 pts)", callback_data="redeem_thelastofus"))
+    builder.row(InlineKeyboardButton(text="🕷️ جميع اجزاء سبايدر مان 1 2 3 (10 pts)", callback_data="redeem_spiderman_all"))
+    builder.row(InlineKeyboardButton(text="🕷️ Spider-Man: Miles Morales (6 pts)", callback_data="redeem_miles"))
+    builder.row(InlineKeyboardButton(text="🏎️ Forza Horizon 4 (6 pts)", callback_data="redeem_forza"))
+    builder.row(InlineKeyboardButton(text="🏎️ Forza Horizon 5 (6 pts)", callback_data="redeem_forza5"))
+    builder.row(InlineKeyboardButton(text="🗡️ Ghost of Tsushima (Gold Edition) (6 pts)", callback_data="redeem_tsushima"))
+    builder.row(InlineKeyboardButton(text="🦇 Batman Arkham Trilogy (6 pts)", callback_data="redeem_batman"))
+    builder.row(InlineKeyboardButton(text="🌀 Naruto Shippuden: Ultimate Ninja Storm (6 pts)", callback_data="redeem_naruto"))
+    builder.row(InlineKeyboardButton(text="🐀 A Plague Tale: Innocence (Part 1) (6 pts)", callback_data="redeem_plague1"))
+    builder.row(InlineKeyboardButton(text="🐀 A Plague Tale: Requiem (Part 2) (6 pts)", callback_data="redeem_plague2"))
+    builder.row(InlineKeyboardButton(text="🏎️ GTA V Account (4 pts)", callback_data="redeem_gta"))
+    builder.row(InlineKeyboardButton(text="💻 Watch Dogs (3 pts)", callback_data="redeem_watchdogs"))
+    builder.row(InlineKeyboardButton(text="🍿 Netflix Account (2 pts)", callback_data="redeem_netflix"))
+    builder.row(InlineKeyboardButton(text="🎮 حساب ستيم عشوائي (1 pts)", callback_data="redeem_steam"))
+    builder.row(InlineKeyboardButton(text="🎁 حساب مخصص / Custom Account (3 pts)", callback_data="redeem_custom_user"))
+    builder.row(InlineKeyboardButton(text="🌫️ Silent Hill f Deluxe (8 pts)", callback_data="redeem_silenthill"))
     builder.row(InlineKeyboardButton(text=t["btn_back"], callback_data="main_menu"))
 
     await callback.message.edit_text(t["redeem_title"], reply_markup=builder.as_markup())
 
-# --- دالة معالجة شراء واستبدال الحسابات ---
 @dp.callback_query(F.data.startswith("redeem_"))
 async def process_redeem(callback: types.CallbackQuery):
     await callback.answer()
@@ -621,35 +603,18 @@ async def process_redeem(callback: types.CallbackQuery):
     category = callback.data.replace("redeem_", "", 1)
 
     costs = {
-        "re4remake": 18,
-        "godofwar": 12,
-        "cyberpunk": 12,
-        "requiem": 10,
-        "rdr2": 6,
-        "fifa26": 6,
-        "thelastofus": 6,
-        "spiderman_all": 10,
-        "miles": 6,
-        "forza": 6,
-        "forza5": 6,
-        "tsushima": 6,
-        "batman": 6,
-        "naruto": 6,
-        "plague1": 6,
-        "plague2": 6,
-        "gta": 4,
-        "watchdogs": 3,
-        "netflix": 2,
-        "steam": 1,
-        "custom_user": 3,
-        "silenthill": 8
+        "re4remake": 18, "godofwar": 12, "cyberpunk": 12, "requiem": 10,
+        "rdr2": 6, "fifa26": 6, "thelastofus": 6, "spiderman_all": 10,
+        "miles": 6, "forza": 6, "forza5": 6, "tsushima": 6,
+        "batman": 6, "naruto": 6, "plague1": 6, "plague2": 6,
+        "gta": 4, "watchdogs": 3, "netflix": 2, "steam": 1,
+        "custom_user": 3, "silenthill": 8
     }
 
     required_points = costs.get(category, 5)
 
     conn = sqlite3.connect("store_bot.db")
     cursor = conn.cursor()
-
     cursor.execute("SELECT points FROM users WHERE user_id = ?", (user_id,))
     user_row = cursor.fetchone()
     user_points = user_row[0] if user_row else 0
@@ -659,52 +624,32 @@ async def process_redeem(callback: types.CallbackQuery):
         await callback.answer(t["not_enough_points"], show_alert=True)
         return
 
-    # النظام يتيح تكرار الحسابات إذا نفدت (ليمتد)، بحيث يتم اختيار حساب متاح أو إعادة إتاحتها
     cursor.execute("""
         SELECT id, username, password FROM accounts 
-        WHERE category = ? AND id NOT IN (SELECT account_id FROM purchases WHERE user_id = ?)
-        LIMIT 1
-    """, (category, user_id))
+        WHERE category = ? 
+        ORDER BY RANDOM() LIMIT 1
+    """, (category,))
     account = cursor.fetchone()
-
-    # إذا اشتريت كل الحسابات المتاحة سابقاً، يسمح النظام بأخذ حساب جديد غير مكرر لنفس المستخدم إذا وجد، وإلا نأخذ أي حساب من نفس الفئة
-    if not account:
-        cursor.execute("""
-            SELECT id, username, password FROM accounts 
-            WHERE category = ?
-            LIMIT 1
-        """, (category,))
-        account = cursor.fetchone()
 
     if not account:
         conn.close()
         await callback.answer(t["no_accounts"], show_alert=True)
         return
 
-    acc_id, username, password = account
+    acc_id, acc_user, acc_pass = account
 
-    try:
-        cursor.execute("BEGIN IMMEDIATE")
-        cursor.execute("UPDATE users SET points = points - ? WHERE user_id = ?", (required_points, user_id))
-        cursor.execute("INSERT OR IGNORE INTO purchases (user_id, account_id) VALUES (?, ?)", (user_id, acc_id))
-        conn.commit()
-    except Exception as e:
-        conn.rollback()
-        conn.close()
-        logging.error(f"Error during purchase transaction: {e}")
-        await callback.answer("❌ حدث خطأ ما، يرجى المحاولة لاحقاً.", show_alert=True)
-        return
-    finally:
-        conn.close()
+    cursor.execute("UPDATE users SET points = points - ? WHERE user_id = ?", (required_points, user_id))
+    cursor.execute("INSERT INTO purchases (user_id, account_id) VALUES (?, ?)", (user_id, acc_id))
+    conn.commit()
+    conn.close()
 
+    success_text = t["success_redeem"].format(acc_user, acc_pass)
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text=t["btn_back"], callback_data="redeem_menu"))
-
-    success_msg = t["success_redeem"].format(username, password)
-    await callback.message.edit_text(success_msg, reply_markup=builder.as_markup())
+    builder.row(InlineKeyboardButton(text=t["btn_back"], callback_data="main_menu"))
+    await callback.message.edit_text(success_text, reply_markup=builder.as_markup())
 
 @dp.callback_query(F.data == "my_purchases")
-async def my_purchases_menu(callback: types.CallbackQuery):
+async def show_my_purchases(callback: types.CallbackQuery):
     await callback.answer()
     user_id = callback.from_user.id
     if not await check_subscription(user_id):
@@ -716,61 +661,59 @@ async def my_purchases_menu(callback: types.CallbackQuery):
     conn = sqlite3.connect("store_bot.db")
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT accounts.id, accounts.category 
-        FROM purchases 
-        JOIN accounts ON purchases.account_id = accounts.id 
-        WHERE purchases.user_id = ?
+        SELECT a.username, a.password, a.category FROM purchases p
+        JOIN accounts a ON p.account_id = a.id
+        WHERE p.user_id = ?
     """, (user_id,))
-    purchased_accounts = cursor.fetchall()
+    purchases = cursor.fetchall()
     conn.close()
 
-    builder = InlineKeyboardBuilder()
-    if not purchased_accounts:
-        builder.row(InlineKeyboardButton(text=t["btn_back"], callback_data="main_menu"))
-        await callback.message.edit_text(f"{t['my_purchases_title']}\n\n{t['no_purchases']}", reply_markup=builder.as_markup())
+    if not purchases:
+        await callback.message.edit_text(t["no_purchases"], reply_markup=InlineKeyboardBuilder().row(InlineKeyboardButton(text=t["btn_back"], callback_data="main_menu")).as_markup())
         return
 
-    for acc_id, category in purchased_accounts:
-        builder.row(InlineKeyboardButton(text=f"📦 حساب: {category}", callback_data=f"show_my_acc_{acc_id}"))
+    text = f"{t['my_purchases_title']}\n\n"
+    for idx, (u, p, cat) in enumerate(purchases, 1):
+        text += f"📦 {idx} - **{cat}**\n👤 ` {u} `\n🔑 ` {p} `\n-------------------\n"
 
+    builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text=t["btn_back"], callback_data="main_menu"))
-    await callback.message.edit_text(t["my_purchases_title"], reply_markup=builder.as_markup())
+    await callback.message.edit_text(text, reply_markup=builder.as_markup())
 
-@dp.callback_query(F.data.startswith("show_my_acc_"))
-async def show_my_account(callback: types.CallbackQuery):
-    await callback.answer()
-    user_id = callback.from_user.id
-    if not await check_subscription(user_id):
+
+# --- ميزة استقبال وتحويل رسائل المستخدمين العادية إليك مع زر "مراسلة مباشرة" ---
+@dp.message(F.text & ~F.text.startswith("/"))
+async def handle_user_messages(message: types.Message):
+    user_id = message.from_user.id
+    
+    # إذا كنت أنت (المدير) من يرسل رسالة في البوت، فلا تفعل شيئاً
+    if user_id == ADMIN_ID:
         return
 
-    lang = get_lang(user_id)
-    t = texts[lang]
-    try:
-        acc_id = int(callback.data.split("_")[3])
-    except (ValueError, IndexError):
-        return
+    # صياغة رسالة التنبيه التي ستصلك
+    forward_text = (
+        f"📩 **رسالة جديدة من عميل / مستخدم:**\n\n"
+        f"👤 الاسم: {message.from_user.full_name}\n"
+        f"🆔 الآيدي: `{user_id}`\n\n"
+        f"💬 النص:\n{message.text}"
+    )
 
-    conn = sqlite3.connect("store_bot.db")
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT accounts.username, accounts.password 
-        FROM purchases 
-        JOIN accounts ON purchases.account_id = accounts.id 
-        WHERE purchases.user_id = ? AND purchases.account_id = ?
-    """, (user_id, acc_id))
-    acc = cursor.fetchone()
-    conn.close()
-
+    # إنشاء زر مباشر يفتح محادثة خاصة مع المستخدم بنقرة واحدة
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text=t["btn_back"], callback_data="my_purchases"))
+    builder.row(InlineKeyboardButton(text="💬 مراسلة المستخدم (خاص)", url=f"tg://user?id={user_id}"))
 
-    if not acc:
-        return
+    # إرسال الرسالة إلى حسابك الشخصي (ADMIN_ID)
+    try:
+        await bot.send_message(ADMIN_ID, forward_text, reply_markup=builder.as_markup(), parse_mode="Markdown")
+        # إرسال إشعار بسيط للمستخدم بأن رسالته وصلت للإدارة
+        await message.answer("✅ تم إرسال رسالتك إلى إدارة المتجر بنجاح، سيتم الرد عليك قريباً.")
+    except Exception as e:
+        logging.error(f"Failed to forward message to admin: {e}")
 
-    username, password = acc
-    await callback.message.edit_text(t["success_reaccess"].format(username, password), reply_markup=builder.as_markup())
 
+# --- تشغيل البوت ---
 async def main():
+    await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
