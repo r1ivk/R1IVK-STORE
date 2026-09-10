@@ -197,7 +197,7 @@ async def give_points_to_user(message: types.Message):
         cursor.execute("UPDATE users SET points = points + ? WHERE user_id = ?", (points_to_give, target_user_id))
         cursor.execute("SELECT points FROM users WHERE user_id = ?", (target_user_id,))
         new_balance = cursor.fetchone()[0]
-    
+     
     conn.commit()
     conn.close()
 
@@ -678,13 +678,11 @@ async def show_my_purchases(callback: types.CallbackQuery):
     builder = InlineKeyboardBuilder()
     text = t["my_purchases_title"] + "\n"
     for idx, (acc_user, acc_pass, cat) in enumerate(rows, 1):
-        # تم تعديل الـ callback_data هنا ليرتبط بدالة العرض المضافة بالأسفل
         builder.row(InlineKeyboardButton(text=f"📂 {cat} (#{idx})", callback_data=f"show_purchased_{idx-1}"))
     
     builder.row(InlineKeyboardButton(text=t["btn_back"], callback_data="main_menu"))
     await callback.message.edit_text(text, reply_markup=builder.as_markup())
 
-# --- أصلحنا مشكلة الأزرار المعلقة في حساباتي المشراة عبر إضافة هذه الدالة ---
 @dp.callback_query(F.data.startswith("show_purchased_"))
 async def show_specific_purchased_account(callback: types.CallbackQuery):
     await callback.answer()
@@ -710,34 +708,98 @@ async def show_specific_purchased_account(callback: types.CallbackQuery):
     rows = cursor.fetchall()
     conn.close()
 
-    if index < len(rows):
+    if 0 <= index < len(rows):
         acc_user, acc_pass = rows[index]
-        details_text = f"🔐 **بيانات الحساب المحفوظ:**\n\n👤 **اسم المستخدم:** `{acc_user}`\n🔑 **كلمة المرور:**\n`{acc_pass}`"
+        success_text = t["success_redeem"].format(acc_user, acc_pass)
+        builder = InlineKeyboardBuilder()
+        builder.row(InlineKeyboardButton(text=t["btn_back"], callback_data="main_menu"))
+        await callback.message.edit_text(success_text, reply_markup=builder.as_markup())
     else:
-        details_text = "❌ عذراً، لم يتم العثور على بيانات هذا الحساب."
+        await callback.answer("❌ الحساب غير موجود.", show_alert=True)
 
-    builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text=t["btn_back"], callback_data="my_purchases"))
-    await callback.message.edit_text(details_text, reply_markup=builder.as_markup())
-
+# --- نظام تحويل الرسائل والمراسلة الفورية للمدير ---
 @dp.callback_query(F.data.startswith("chat_with_"))
-async def admin_start_chat(callback: types.CallbackQuery):
+async def admin_start_chat_with_user(callback: types.CallbackQuery):
     if callback.from_user.id != ADMIN_ID:
-        await callback.answer("❌ هذا الزر للمدير فقط!", show_alert=True)
         return
-    
-    target_user_id = int(callback.data.replace("chat_with_", ""))
-    
+    try:
+        target_id = int(callback.data.replace("chat_with_", ""))
+    except ValueError:
+        return
+
     conn = sqlite3.connect("store_bot.db")
     cursor = conn.cursor()
-    cursor.execute("INSERT OR REPLACE INTO admin_chat (admin_id, active_target_user_id) VALUES (?, ?)", (ADMIN_ID, target_user_id))
+    cursor.execute("INSERT OR REPLACE INTO admin_chat (admin_id, active_target_user_id) VALUES (?, ?)", (ADMIN_ID, target_id))
     conn.commit()
     conn.close()
-    
-    await callback.answer("✅ تم ربطك بهذا المستخدم بنجاح! أي رسالة تكتبها الآن ستُرسل له مباشرة.", show_alert=True)
-    await callback.message.reply(f"💬 **أنت الآن تتحدث مع المستخدم (`{target_user_id}`) مباشرة.**\nلإنهاء وضع المحادثة أرسل الأمر: `/end`")
 
+    await callback.answer("✅ تم اختيار المستخدم بنجاح!", show_alert=True)
+    await callback.message.answer(f"🟢 **أنت الآن في وضع الدردشة المباشرة مع المستخدم:** `{target_id}`\n\nأي رسالة ترسلها الآن هنا سيتم توجيهها فوراً إلى خاص هذا المستخدم.\nلإيقاف الدردشة والخروج من هذا الوضع، أرسل الأمر: `/end`")
+
+@dp.message()
+async def handle_all_messages(message: types.Message):
+    user_id = message.from_user.id
+
+    # إذا كان المرسل هو المدير
+    if user_id == ADMIN_ID:
+        # التحقق هل المدير في وضع دردشة مباشرة مع مستخدم معين
+        conn = sqlite3.connect("store_bot.db")
+        cursor = conn.cursor()
+        cursor.execute("SELECT active_target_user_id FROM admin_chat WHERE admin_id = ?", (ADMIN_ID,))
+        row = cursor.fetchone()
+        conn.close()
+
+        if row and row[0]:
+            target_user_id = row[0]
+            try:
+                # إرسال رد المدير للمستخدم مباشرة على الخاص
+                await bot.send_message(
+                    chat_id=target_user_id,
+                    text=f"💬 **رد الإدارة:**\n\n{message.text}"
+                )
+                await message.reply("✅ تم إرسال الرد للمستخدم بنجاح.")
+            except Exception as e:
+                await message.answer(f"❌ فشل إرسال الرسالة للمستخدم: {e}")
+        return
+
+    # إذا كان المرسل مستخدماً عادياً
+    # التحقق من الاشتراك أولاً
+    if not await check_subscription(user_id):
+        lang = get_lang(user_id)
+        t = texts[lang]
+        builder = InlineKeyboardBuilder()
+        builder.row(InlineKeyboardButton(text=t["btn_subscribe_ch1"], url=f"https://t.me/{REQUIRED_CHANNELS[0].replace('@', '')}"))
+        builder.row(InlineKeyboardButton(text=t["btn_subscribe_ch2"], url=f"https://t.me/{REQUIRED_CHANNELS[1].replace('@', '')}"))
+        builder.row(InlineKeyboardButton(text=t["btn_check_sub"], callback_data="check_sub"))
+        await message.answer(t["sub_required"], reply_markup=builder.as_markup())
+        return
+
+    # تحويل رسالة المستخدم للمدير فوراً مع زر لفتح محادثة مباشرة معه ومعرفة بروفايله
+    user_name = message.from_user.full_name
+    username_str = f"@{message.from_user.username}" if message.from_user.username else "لا يوجد معرف"
+    
+    admin_notif = (
+        f"📩 **رسالة جديدة من مستخدم:**\n\n"
+        f"👤 الاسم: {user_name}\n"
+        f"🏷 المعرف: {username_str}\n"
+        f"🆔 الآيدي: `{user_id}`\n\n"
+        f"💬 النص المرسل:\n{message.text}"
+    )
+
+    builder = InlineKeyboardBuilder()
+    # زر يفتح بروفايل المستخدم مباشرة عبر تيليجرام
+    builder.row(InlineKeyboardButton(text="👤 فتح بروفايل المستخدم", url=f"tg://user?id={user_id}"))
+    # زر لتفعيل وضع الرد المباشر بضغطة واحدة
+    builder.row(InlineKeyboardButton(text="💬 مراسلة هذا المستخدم", callback_data=f"chat_with_{user_id}"))
+
+    try:
+        await bot.send_message(chat_id=ADMIN_ID, text=admin_notif, reply_markup=builder.as_markup())
+    except Exception as e:
+        logging.error(f"Failed to forward message to admin: {e}")
+
+# --- تشغيل البوت ---
 async def main():
+    await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
