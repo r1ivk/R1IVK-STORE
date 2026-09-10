@@ -99,11 +99,14 @@ texts = {
         "success_redeem": "🎉 **مبروك! تم شراء الحساب بنجاح:**\n\n👤 **اسم المستخدم (Username):** `{}`\n🔑 **كلمة المرور (Password):**\n`{}`\n\n*(الحسابات هنا متوفرة بلا حدود وتعمل دائماً)*",
         "btn_back": "⬅️ رجوع للقائمة الرئيسية",
         "btn_share": "📤 مشاركة الرابط مع الأصدقاء",
-        "sub_required": "⚠️ **عذراً، يجب عليك الاشتراك في قنوات المتجر وشات القناة أولاً لكي تتمكن من استخدام البوت!**\n\nيرجى الانضمام إليهما ثم اضغط على زر التحقق أدناه 👇",
-        "btn_subscribe_ch1": "📢 اشترك في القناة الأولى",
-        "btn_subscribe_ch2": "💬 انضم لشات القناة",
-        "btn_check_sub": "🔄 تحقق من الاشتراك",
-        "not_subscribed_yet": "❌ لم تقم بالاشتراك في جميع القنوات بعد! يرجى الاشتراك ثم حاول مجدداً."
+        "sub_required": (
+            "⚠️ **عذراً، يجب عليك الاشتراك في قناة البوت أولاً لكي تتمكن من استخدام البوت!**\n"
+            "Please subscribe to the channel first to use the bot!\n\n"
+            "🔗 رابط القناة / Channel Link: https://t.me/r1iv_k"
+        ),
+        "btn_subscribe_ch1": "📢 اشترك في القناة / Channel",
+        "btn_check_sub": "🔄 تحقق من الاشتراك / Verify Subscription",
+        "not_subscribed_yet": "❌ لم تقم بالاشتراك في القناة بعد! يرجى الاشتراك ثم حاول مجدداً.\nYou haven't subscribed yet!"
     },
     "en": {
         "welcome": "Welcome to r1ivk Store 🎮\nChoose your preferred language or explore the updated game sections below 👇.\n\n💬 **Note:** For any inquiry or issue, send your message here and I will receive it directly.",
@@ -124,11 +127,14 @@ texts = {
         "success_redeem": "🎉 **Congratulations! Account purchased successfully:**\n\n👤 **Username:** `{}`\n🔑 **Password:**\n`{}`\n*(Accounts are unlimited and always active)*",
         "btn_back": "Main Menu",
         "btn_share": "📤 Share Link with Friends",
-        "sub_required": "⚠️ **Sorry, you must subscribe to the store channels first to use this bot!**\n\nPlease join them and click the check button below 👇",
-        "btn_subscribe_ch1": "📢 Subscribe to Channel 1",
-        "btn_subscribe_ch2": "💬 Join Channel Chat",
-        "btn_check_sub": "🔄 Check Subscription",
-        "not_subscribed_yet": "❌ You haven't subscribed to all channels yet! Please subscribe and try again."
+        "sub_required": (
+            "⚠️ **Sorry, you must subscribe to the channel first to use the bot!**\n"
+            "عذراً، يجب عليك الاشتراك في القناة أولاً لتتمكن من استخدام البوت!\n\n"
+            "🔗 Channel Link / رابط القناة: https://t.me/r1iv_k"
+        ),
+        "btn_subscribe_ch1": "📢 Subscribe to Channel / اشترك",
+        "btn_check_sub": "🔄 Verify Subscription / تحقق",
+        "not_subscribed_yet": "❌ You haven't subscribed to the channel yet! Please subscribe and try again."
     }
 }
 
@@ -321,14 +327,14 @@ async def cmd_start(message: types.Message):
 
     conn.close()
 
+    # التحقق الإجباري الفوري من الاشتراك عند الضغط على Start
     if not await check_subscription(user_id):
         lang = get_lang(user_id)
         t = texts[lang]
         builder = InlineKeyboardBuilder()
         builder.row(InlineKeyboardButton(text=t["btn_subscribe_ch1"], url=f"https://t.me/{REQUIRED_CHANNELS[0].replace('@', '')}"))
-        builder.row(InlineKeyboardButton(text=t["btn_subscribe_ch2"], url=f"https://t.me/{REQUIRED_CHANNELS[1].replace('@', '')}"))
         builder.row(InlineKeyboardButton(text=t["btn_check_sub"], callback_data="check_sub"))
-        await message.answer(t["sub_required"], reply_markup=builder.as_markup())
+        await message.answer(t["sub_required"], reply_markup=builder.as_markup(), disable_web_page_preview=True)
         return
 
     lang = get_lang(user_id)
@@ -364,14 +370,17 @@ async def verify_subscription(callback: types.CallbackQuery):
             ref_data = cursor.fetchone()
             if ref_data:
                 ref_lang, new_ref_points = ref_data
-                notif_text = f"🎉 **New Referral!**\n\n👤 A new person joined via your link.\n💎 Your balance is now: `{new_ref_points}` pts." if ref_lang == "en" else f"🎉 **تم تسجيل دعوة جديدة!**\n\n👤 انضم شخص جديد عبر رابطك واشترك بالقنوات!\n💎 زاد رصيدك وأصبح: `{new_ref_points}` نقطة."
+                notif_text = f"🎉 **New Referral!**\n\n👤 A new person joined via your link.\n💎 Your balance is now: `{new_ref_points}` pts." if ref_lang == "en" else f"🎉 **تم تسجيل دعوة جديدة!**\n\n👤 انضم شخص جديد عبر رابطك واشترك بالقناة!\n💎 زاد رصيدك وأصبح: `{new_ref_points}` نقطة."
                 try:
                     await bot.send_message(chat_id=referred_by, text=notif_text)
                 except Exception as e:
                     logging.error(f"Failed to send referral notification: {e}")
 
         conn.close()
-        await callback.message.edit_text(t["welcome"], reply_markup=get_main_keyboard(lang))
+        try:
+            await callback.message.edit_text(t["welcome"], reply_markup=get_main_keyboard(lang))
+        except Exception:
+            await callback.message.answer(t["welcome"], reply_markup=get_main_keyboard(lang))
     else:
         await callback.answer(t["not_subscribed_yet"], show_alert=True)
 
@@ -379,7 +388,7 @@ async def verify_subscription(callback: types.CallbackQuery):
 async def toggle_lang(callback: types.CallbackQuery):
     user_id = callback.from_user.id
     if not await check_subscription(user_id):
-        await callback.answer("⚠️ يجب الاشتراك في القنوات أولاً!", show_alert=True)
+        await callback.answer("⚠️ يجب الاشتراك في القناة أولاً / Subscribe first!", show_alert=True)
         return
 
     current_lang = get_lang(user_id)
@@ -447,7 +456,7 @@ async def earn_points_menu(callback: types.CallbackQuery):
 
     t = texts[lang]
     if lang == "ar":
-        text = f"💎 **طريقة تجميع النقاط (دعوة الأصدقاء):**\n\nقم بمشاركة رابط الدعوة الخاص بك مع أصدقائك أو في المجموعات.\nلكل شخص جديد يدخل البوت عبر رابطك ويشترك بالقنوات، ستحصل أنت على **1 نقطة** فوراً!\n\n🔗 رابطك الخاص:\n`{ref_link}`"
+        text = f"💎 **طريقة تجميع النقاط (دعوة الأصدقاء):**\n\nقم بمشاركة رابط الدعوة الخاص بك مع أصدقائك أو في المجموعات.\nلكل شخص جديد يدخل البوت عبر رابطك ويشترك بالقناة، ستحصل أنت على **1 نقطة** فوراً!\n\n🔗 رابطك الخاص:\n`{ref_link}`"
     else:
         text = f"💎 **How to earn points (Invite Friends):**\n\nShare your referral link with friends or groups.\nFor every new person who joins via your link and subscribes, you will get **1 point** instantly!\n\n🔗 Your link:\n`{ref_link}`"
 
@@ -617,7 +626,7 @@ async def redeem_menu(callback: types.CallbackQuery):
 async def process_redeem(callback: types.CallbackQuery):
     user_id = callback.from_user.id
     if not await check_subscription(user_id):
-        await callback.answer("⚠️ يجب الاشتراك في القنوات أولاً!", show_alert=True)
+        await callback.answer("⚠️ يجب الاشتراك في القناة أولاً / Subscribe first!", show_alert=True)
         return
 
     lang = get_lang(user_id)
@@ -646,7 +655,7 @@ async def process_redeem(callback: types.CallbackQuery):
         await callback.answer(t["not_enough_points"], show_alert=True)
         return
 
-    # اختيار حساب عشوائي دون حذفه لتبقى الحسابات بلا حدود (تتكرر لجميع المستخدمين)
+    # استخراج حساب عشوائي دون حذفه (لتتكرر الحسابات بلا حدود لجميع المستخدمين)
     cursor.execute("""
         SELECT id, username, password FROM accounts 
         WHERE category = ? 
@@ -778,21 +787,21 @@ async def handle_all_messages(message: types.Message):
             try:
                 await bot.send_message(
                     chat_id=target_user_id,
-                    text=f"💬 **رد الإدارة:**\n\n{message.text}"
+                    text=f"💬 **رد الإدارة / Admin Reply:**\n\n{message.text}"
                 )
                 await message.reply("✅ تم إرسال الرد للمستخدم بنجاح.")
             except Exception as e:
                 await message.answer(f"❌ فشل إرسال الرسالة للمستخدم: {e}")
         return
 
+    # فحص الاشتراك الإجباري عند إرسال أي رسالة للشات
     if not await check_subscription(user_id):
         lang = get_lang(user_id)
         t = texts[lang]
         builder = InlineKeyboardBuilder()
         builder.row(InlineKeyboardButton(text=t["btn_subscribe_ch1"], url=f"https://t.me/{REQUIRED_CHANNELS[0].replace('@', '')}"))
-        builder.row(InlineKeyboardButton(text=t["btn_subscribe_ch2"], url=f"https://t.me/{REQUIRED_CHANNELS[1].replace('@', '')}"))
         builder.row(InlineKeyboardButton(text=t["btn_check_sub"], callback_data="check_sub"))
-        await message.answer(t["sub_required"], reply_markup=builder.as_markup())
+        await message.answer(t["sub_required"], reply_markup=builder.as_markup(), disable_web_page_preview=True)
         return
 
     user_name = message.from_user.full_name
