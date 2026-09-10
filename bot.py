@@ -9,7 +9,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 # --- إعدادات البوت والمدير ---
 API_TOKEN = "8948074959:AAG5_PFOSO-pzNrZENuowrWA3HtdMyeIGfo"
 ADMIN_ID = 6266959915
-REQUIRED_CHANNELS = ["@r1iv_k"]  # أضف القنوات الأخرى هنا إن وجدت مثل ["@r1iv_k", "@channel2"]
+REQUIRED_CHANNELS = ["@r1iv_k"]
 
 POINT_PACKAGES = {
     2: 5,
@@ -207,6 +207,17 @@ async def give_points_to_user(message: types.Message):
     except Exception as e:
         logging.error(f"Failed to notify user: {e}")
 
+@dp.message(Command("end"))
+async def end_chat_cmd(message: types.Message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    conn = sqlite3.connect("store_bot.db")
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM admin_chat WHERE admin_id = ?", (ADMIN_ID,))
+    conn.commit()
+    conn.close()
+    await message.answer("🔴 **تم إنهاء وضع الدردشة المباشرة.** الرسائل القادمة لن تُحول لأحد حتى تختار عميلًا جديدًا.")
+
 @dp.message(Command("add_accounts"))
 async def seed_accounts_cmd(message: types.Message):
     if message.from_user.id != ADMIN_ID:
@@ -290,6 +301,7 @@ async def cmd_start(message: types.Message):
         t = texts[lang]
         builder = InlineKeyboardBuilder()
         builder.row(InlineKeyboardButton(text=t["btn_subscribe_ch1"], url=f"https://t.me/{REQUIRED_CHANNELS[0].replace('@', '')}"))
+        builder.row(InlineKeyboardButton(text=t["btn_subscribe_ch2"], url=f"https://t.me/{REQUIRED_CHANNELS[1].replace('@', '')}"))
         builder.row(InlineKeyboardButton(text=t["btn_check_sub"], callback_data="check_sub"))
         await message.answer(t["sub_required"], reply_markup=builder.as_markup())
         return
@@ -314,11 +326,11 @@ async def verify_subscription(callback: types.CallbackQuery):
         if not user_row:
             cursor.execute("INSERT INTO users (user_id, points, referred_by, lang) VALUES (?, 0, NULL, 'ar')", (user_id,))
             conn.commit()
-            referred_by = None
+            lang, referred_by = 'ar', None
         else:
-            _, referred_by, _ = user_row
+            lang, referred_by, _ = user_row
 
-        if referred_by and referred_by > 0:
+        if referred_by:
             cursor.execute("SELECT referred_by FROM users WHERE user_id = ?", (user_id,))
             current_ref_status = cursor.fetchone()
             
@@ -666,76 +678,64 @@ async def show_my_purchases(callback: types.CallbackQuery):
     builder = InlineKeyboardBuilder()
     text = t["my_purchases_title"] + "\n"
     for idx, (acc_user, acc_pass, cat) in enumerate(rows, 1):
-        builder.row(InlineKeyboardButton(text=f"📂 {cat} (#{idx})", callback_data=f"show_acc_{idx}"))
+        # تم تعديل الـ callback_data هنا ليرتبط بدالة العرض المضافة بالأسفل
+        builder.row(InlineKeyboardButton(text=f"📂 {cat} (#{idx})", callback_data=f"show_purchased_{idx-1}"))
     
     builder.row(InlineKeyboardButton(text=t["btn_back"], callback_data="main_menu"))
     await callback.message.edit_text(text, reply_markup=builder.as_markup())
 
-@dp.callback_query(F.data.startswith("show_acc_"))
-async def show_purchased_account_details(callback: types.CallbackQuery):
+# --- أصلحنا مشكلة الأزرار المعلقة في حساباتي المشراة عبر إضافة هذه الدالة ---
+@dp.callback_query(F.data.startswith("show_purchased_"))
+async def show_specific_purchased_account(callback: types.CallbackQuery):
     await callback.answer()
     user_id = callback.from_user.id
     if not await check_subscription(user_id):
         return
 
     try:
-        idx = int(callback.data.replace("show_acc_", ""))
+        index = int(callback.data.replace("show_purchased_", ""))
     except ValueError:
         return
+
+    lang = get_lang(user_id)
+    t = texts[lang]
 
     conn = sqlite3.connect("store_bot.db")
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT a.username, a.password, a.category FROM purchases p
+        SELECT a.username, a.password FROM purchases p
         JOIN accounts a ON p.account_id = a.id
         WHERE p.user_id = ?
     """, (user_id,))
     rows = cursor.fetchall()
     conn.close()
 
-    if idx < 1 or idx > len(rows):
-        await callback.answer("❌ الحساب غير موجود.", show_alert=True)
-        return
+    if index < len(rows):
+        acc_user, acc_pass = rows[index]
+        details_text = f"🔐 **بيانات الحساب المحفوظ:**\n\n👤 **اسم المستخدم:** `{acc_user}`\n🔑 **كلمة المرور:**\n`{acc_pass}`"
+    else:
+        details_text = "❌ عذراً، لم يتم العثور على بيانات هذا الحساب."
 
-    acc_user, acc_pass, cat = rows[idx - 1]
-    lang = get_lang(user_id)
-    t = texts[lang]
-
-    details_text = f"📂 **تفاصيل الحساب المشترى:**\n\n🏷️ القسم: `{cat}`\n👤 اسم المستخدم: `{acc_user}`\n🔑 كلمة المرور:\n`{acc_pass}`"
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text=t["btn_back"], callback_data="my_purchases"))
     await callback.message.edit_text(details_text, reply_markup=builder.as_markup())
 
-# --- نظام خدمة العملاء والمحادثة المباشرة مع الأدمن (محدث ومباشر) ---
-@dp.message(F.text & ~F.text.startswith("/"))
-async def handle_user_messages(message: types.Message):
-    user_id = message.from_user.id
-    if user_id == ADMIN_ID:
+@dp.callback_query(F.data.startswith("chat_with_"))
+async def admin_start_chat(callback: types.CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("❌ هذا الزر للمدير فقط!", show_alert=True)
         return
-
-    # إرسال الرسالة للمدير فوراً مع زر مباشر للخاص
-    user_name = message.from_user.full_name
-    username_str = f"@{message.from_user.username}" if message.from_user.username else "لا يوجد"
     
-    builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="💬 مراسلة المستخدم على الخاص", url=f"tg://user?id={user_id}"))
-
-    admin_msg = (
-        f"📩 **رسالة جديدة من مستخدم:**\n\n"
-        f"👤 الاسم: {user_name}\n"
-        f"🆔 الآيدي: `{user_id}`\n"
-        f"🌐 اليوزر: {username_str}\n\n"
-        f"💬 النص: {message.text}"
-    )
-
-    try:
-        await bot.send_message(chat_id=ADMIN_ID, text=admin_msg, reply_markup=builder.as_markup())
-        if get_lang(user_id) == "ar":
-            await message.answer("✅ تم إرسال رسالتك إلى إدارة المتجر بنجاح، سيتم الرد عليك قريبًا.")
-        else:
-            await message.answer("✅ Your message has been sent to the store administration successfully. We will reply soon.")
-    except Exception as e:
-        logging.error(f"Failed to forward message to admin: {e}")
+    target_user_id = int(callback.data.replace("chat_with_", ""))
+    
+    conn = sqlite3.connect("store_bot.db")
+    cursor = conn.cursor()
+    cursor.execute("INSERT OR REPLACE INTO admin_chat (admin_id, active_target_user_id) VALUES (?, ?)", (ADMIN_ID, target_user_id))
+    conn.commit()
+    conn.close()
+    
+    await callback.answer("✅ تم ربطك بهذا المستخدم بنجاح! أي رسالة تكتبها الآن ستُرسل له مباشرة.", show_alert=True)
+    await callback.message.reply(f"💬 **أنت الآن تتحدث مع المستخدم (`{target_user_id}`) مباشرة.**\nلإنهاء وضع المحادثة أرسل الأمر: `/end`")
 
 async def main():
     await dp.start_polling(bot)
