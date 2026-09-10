@@ -91,12 +91,12 @@ texts = {
         "btn_my_purchases": "📁 حساباتي المشراة",
         "btn_lang": "🌐 تغيير اللغة / Change Language",
         "account_info": "👤 **معلومات حسابك:**\n\n🆔 رقم المستخدم: `{}`\n💎 النقاط: `{}` نقطة\n\n🔗 رابط الدعوة الخاص بك:\n`{}`\n*(ستحصل على **1 نقطة** فوراً مقابل كل صديق جديد ينضم عبر رابطك!)*",
-        "redeem_title": "🎁 **قسم استبدال الحسابات (متاحة للجميع بشكل دائم):**\n\nاختر نوع الحساب الذي تريد استبداله بنقاطك:",
+        "redeem_title": "🎁 **قسم استبدال الحسابات (متاحة للجميع بلا حدود):**\n\nاختر نوع الحساب الذي تريد استبداله بنقاطك:",
         "my_purchases_title": "📁 **حساباتك المشراة (متاحة لك للأبد):**\n\nاضغط على الحساب لعرض بياناته متى شئت بدون خصم أي نقاط:",
         "no_purchases": "❌ لم تقم بشراء أي حسابات حتى الآن.",
         "no_accounts": "❌ عذراً، لا توجد حسابات متاحة حالياً في هذا القسم.",
         "not_enough_points": "⚠️ نقاطك غير كافية! يلزمك المزيد من النقاط لفتح هذا الحساب.",
-        "success_redeem": "🎉 **مبروك! تم شراء الحساب بنجاح:**\n\n👤 **اسم المستخدم (Username):** `{}`\n🔑 **كلمة المرور (Password):**\n`{}`\n\n*(تم حفظ الحساب في سجلك للأبد)*",
+        "success_redeem": "🎉 **مبروك! تم شراء الحساب بنجاح:**\n\n👤 **اسم المستخدم (Username):** `{}`\n🔑 **كلمة المرور (Password):**\n`{}`\n\n*(الحسابات هنا متوفرة بلا حدود وتعمل دائماً)*",
         "btn_back": "⬅️ رجوع للقائمة الرئيسية",
         "btn_share": "📤 مشاركة الرابط مع الأصدقاء",
         "sub_required": "⚠️ **عذراً، يجب عليك الاشتراك في قنوات المتجر وشات القناة أولاً لكي تتمكن من استخدام البوت!**\n\nيرجى الانضمام إليهما ثم اضغط على زر التحقق أدناه 👇",
@@ -121,7 +121,7 @@ texts = {
         "no_purchases": "❌ You haven't purchased any accounts yet.",
         "no_accounts": "❌ Sorry, no accounts are currently available in this category.",
         "not_enough_points": "⚠️ Not enough points! You need more points to redeem this account.",
-        "success_redeem": "🎉 **Congratulations! Account purchased successfully:**\n\n👤 **Username:** `{}`\n🔑 **Password:**\n`{}`\n*(Saved to your profile forever)*",
+        "success_redeem": "🎉 **Congratulations! Account purchased successfully:**\n\n👤 **Username:** `{}`\n🔑 **Password:**\n`{}`\n*(Accounts are unlimited and always active)*",
         "btn_back": "Main Menu",
         "btn_share": "📤 Share Link with Friends",
         "sub_required": "⚠️ **Sorry, you must subscribe to the store channels first to use this bot!**\n\nPlease join them and click the check button below 👇",
@@ -173,6 +173,31 @@ async def bot_statistics(message: types.Message):
     conn.close()
     await message.answer(f"📊 **إحصائيات البوت:**\n\n👥 إجمالي عدد المستخدمين: `{total_users}` مستخدم")
 
+# --- أمر النقاط اللانهائية الخاص بالمدير ---
+@dp.message(Command("add_points"))
+async def add_infinite_points(message: types.Message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    args = message.text.split()
+    points_to_add = int(args[1]) if len(args) > 1 and args[1].isdigit() else 999999
+
+    conn = sqlite3.connect("store_bot.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT points FROM users WHERE user_id = ?", (ADMIN_ID,))
+    user = cursor.fetchone()
+
+    if not user:
+        cursor.execute("INSERT INTO users (user_id, points, referred_by, lang) VALUES (?, ?, NULL, 'ar')", (ADMIN_ID, points_to_add))
+    else:
+        cursor.execute("UPDATE users SET points = points + ? WHERE user_id = ?", (points_to_add, ADMIN_ID))
+    
+    conn.commit()
+    cursor.execute("SELECT points FROM users WHERE user_id = ?", (ADMIN_ID,))
+    new_balance = cursor.fetchone()[0]
+    conn.close()
+
+    await message.answer(f"♾️ **تمت إضافة النقاط بنجاح!**\n💰 رصيدك الحالي الآن: `{new_balance}` نقطة (لا نهائية).")
+
 @dp.message(Command("give"))
 async def give_points_to_user(message: types.Message):
     if message.from_user.id != ADMIN_ID:
@@ -216,7 +241,7 @@ async def end_chat_cmd(message: types.Message):
     cursor.execute("DELETE FROM admin_chat WHERE admin_id = ?", (ADMIN_ID,))
     conn.commit()
     conn.close()
-    await message.answer("🔴 **تم إنهاء وضع الدردشة المباشرة.** الرسائل القادمة لن تُحول لأحد حتى تختار عميلًا جديدًا.")
+    await message.answer("🔴 **تم إنهاء وضع الدردشة المباشرة.**")
 
 @dp.message(Command("add_accounts"))
 async def seed_accounts_cmd(message: types.Message):
@@ -259,7 +284,7 @@ async def seed_accounts_cmd(message: types.Message):
 
     conn.commit()
     conn.close()
-    await message.answer(f"✅ تمت إضافة الحسابات بنجاح!\n📦 عدد الحسابات الجديدة المضافة: `{added_count}`")
+    await message.answer(f"✅ تمت إضافة الحسابات بنجاح!\n📦 عدد الحسابات الجديدة: `{added_count}`")
 
 @dp.message(CommandStart())
 async def cmd_start(message: types.Message):
@@ -330,24 +355,20 @@ async def verify_subscription(callback: types.CallbackQuery):
         else:
             lang, referred_by, _ = user_row
 
-        if referred_by:
-            cursor.execute("SELECT referred_by FROM users WHERE user_id = ?", (user_id,))
-            current_ref_status = cursor.fetchone()
-            
-            if current_ref_status and current_ref_status[0] == referred_by:
-                cursor.execute("UPDATE users SET points = points + 1 WHERE user_id = ?", (referred_by,))
-                cursor.execute("UPDATE users SET referred_by = -1 WHERE user_id = ?", (user_id,))
-                conn.commit()
+        if referred_by and referred_by > 0:
+            cursor.execute("UPDATE users SET points = points + 1 WHERE user_id = ?", (referred_by,))
+            cursor.execute("UPDATE users SET referred_by = -1 WHERE user_id = ?", (user_id,))
+            conn.commit()
 
-                cursor.execute("SELECT lang, points FROM users WHERE user_id = ?", (referred_by,))
-                ref_data = cursor.fetchone()
-                if ref_data:
-                    ref_lang, new_ref_points = ref_data
-                    notif_text = f"🎉 **New Referral!**\n\n👤 A new person joined via your link.\n💎 Your balance is now: `{new_ref_points}` pts." if ref_lang == "en" else f"🎉 **تم تسجيل دعوة جديدة!**\n\n👤 انضم شخص جديد عبر رابطك واشترك بالقنوات!\n💎 زاد رصيدك وأصبح: `{new_ref_points}` نقطة."
-                    try:
-                        await bot.send_message(chat_id=referred_by, text=notif_text)
-                    except Exception as e:
-                        logging.error(f"Failed to send referral notification: {e}")
+            cursor.execute("SELECT lang, points FROM users WHERE user_id = ?", (referred_by,))
+            ref_data = cursor.fetchone()
+            if ref_data:
+                ref_lang, new_ref_points = ref_data
+                notif_text = f"🎉 **New Referral!**\n\n👤 A new person joined via your link.\n💎 Your balance is now: `{new_ref_points}` pts." if ref_lang == "en" else f"🎉 **تم تسجيل دعوة جديدة!**\n\n👤 انضم شخص جديد عبر رابطك واشترك بالقنوات!\n💎 زاد رصيدك وأصبح: `{new_ref_points}` نقطة."
+                try:
+                    await bot.send_message(chat_id=referred_by, text=notif_text)
+                except Exception as e:
+                    logging.error(f"Failed to send referral notification: {e}")
 
         conn.close()
         await callback.message.edit_text(t["welcome"], reply_markup=get_main_keyboard(lang))
@@ -594,9 +615,9 @@ async def redeem_menu(callback: types.CallbackQuery):
 
 @dp.callback_query(F.data.startswith("redeem_"))
 async def process_redeem(callback: types.CallbackQuery):
-    await callback.answer()
     user_id = callback.from_user.id
     if not await check_subscription(user_id):
+        await callback.answer("⚠️ يجب الاشتراك في القنوات أولاً!", show_alert=True)
         return
 
     lang = get_lang(user_id)
@@ -625,6 +646,7 @@ async def process_redeem(callback: types.CallbackQuery):
         await callback.answer(t["not_enough_points"], show_alert=True)
         return
 
+    # اختيار حساب عشوائي دون حذفه لتبقى الحسابات بلا حدود (تتكرر لجميع المستخدمين)
     cursor.execute("""
         SELECT id, username, password FROM accounts 
         WHERE category = ? 
@@ -647,7 +669,12 @@ async def process_redeem(callback: types.CallbackQuery):
     success_text = t["success_redeem"].format(acc_user, acc_pass)
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text=t["btn_back"], callback_data="main_menu"))
-    await callback.message.edit_text(success_text, reply_markup=builder.as_markup())
+    
+    await callback.answer()
+    try:
+        await callback.message.edit_text(success_text, reply_markup=builder.as_markup())
+    except Exception:
+        await callback.message.answer(success_text, reply_markup=builder.as_markup())
 
 @dp.callback_query(F.data == "my_purchases")
 async def show_my_purchases(callback: types.CallbackQuery):
@@ -717,7 +744,6 @@ async def show_specific_purchased_account(callback: types.CallbackQuery):
     else:
         await callback.answer("❌ الحساب غير موجود.", show_alert=True)
 
-# --- نظام تحويل الرسائل والمراسلة الفورية للمدير ---
 @dp.callback_query(F.data.startswith("chat_with_"))
 async def admin_start_chat_with_user(callback: types.CallbackQuery):
     if callback.from_user.id != ADMIN_ID:
@@ -734,15 +760,13 @@ async def admin_start_chat_with_user(callback: types.CallbackQuery):
     conn.close()
 
     await callback.answer("✅ تم اختيار المستخدم بنجاح!", show_alert=True)
-    await callback.message.answer(f"🟢 **أنت الآن في وضع الدردشة المباشرة مع المستخدم:** `{target_id}`\n\nأي رسالة ترسلها الآن هنا سيتم توجيهها فوراً إلى خاص هذا المستخدم.\nلإيقاف الدردشة والخروج من هذا الوضع، أرسل الأمر: `/end`")
+    await callback.message.answer(f"🟢 **أنت الآن في وضع الدردشة المباشرة مع المستخدم:** `{target_id}`\n\nأي رسالة ترسلها الآن هنا سيتم توجيهها فوراً إلى خاص هذا المستخدم.\nلإيقاف الدردشة، أرسل الأمر: `/end`")
 
 @dp.message()
 async def handle_all_messages(message: types.Message):
     user_id = message.from_user.id
 
-    # إذا كان المرسل هو المدير
     if user_id == ADMIN_ID:
-        # التحقق هل المدير في وضع دردشة مباشرة مع مستخدم معين
         conn = sqlite3.connect("store_bot.db")
         cursor = conn.cursor()
         cursor.execute("SELECT active_target_user_id FROM admin_chat WHERE admin_id = ?", (ADMIN_ID,))
@@ -752,7 +776,6 @@ async def handle_all_messages(message: types.Message):
         if row and row[0]:
             target_user_id = row[0]
             try:
-                # إرسال رد المدير للمستخدم مباشرة على الخاص
                 await bot.send_message(
                     chat_id=target_user_id,
                     text=f"💬 **رد الإدارة:**\n\n{message.text}"
@@ -762,8 +785,6 @@ async def handle_all_messages(message: types.Message):
                 await message.answer(f"❌ فشل إرسال الرسالة للمستخدم: {e}")
         return
 
-    # إذا كان المرسل مستخدماً عادياً
-    # التحقق من الاشتراك أولاً
     if not await check_subscription(user_id):
         lang = get_lang(user_id)
         t = texts[lang]
@@ -774,7 +795,6 @@ async def handle_all_messages(message: types.Message):
         await message.answer(t["sub_required"], reply_markup=builder.as_markup())
         return
 
-    # تحويل رسالة المستخدم للمدير فوراً مع زر لفتح محادثة مباشرة معه ومعرفة بروفايله
     user_name = message.from_user.full_name
     username_str = f"@{message.from_user.username}" if message.from_user.username else "لا يوجد معرف"
     
@@ -787,9 +807,7 @@ async def handle_all_messages(message: types.Message):
     )
 
     builder = InlineKeyboardBuilder()
-    # زر يفتح بروفايل المستخدم مباشرة عبر تيليجرام
     builder.row(InlineKeyboardButton(text="👤 فتح بروفايل المستخدم", url=f"tg://user?id={user_id}"))
-    # زر لتفعيل وضع الرد المباشر بضغطة واحدة
     builder.row(InlineKeyboardButton(text="💬 مراسلة هذا المستخدم", callback_data=f"chat_with_{user_id}"))
 
     try:
@@ -797,7 +815,6 @@ async def handle_all_messages(message: types.Message):
     except Exception as e:
         logging.error(f"Failed to forward message to admin: {e}")
 
-# --- تشغيل البوت ---
 async def main():
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
