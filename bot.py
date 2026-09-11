@@ -333,6 +333,7 @@ async def cmd_start(message: types.Message):
         await message.answer(t["sub_required"], reply_markup=builder.as_markup(), disable_web_page_preview=True)
         return
 
+    # منح النقاط للمُحيل فور التحقق إن كان مشتركاً وصار نشطاً
     conn = sqlite3.connect("store_bot.db")
     cursor = conn.cursor()
     cursor.execute("SELECT lang, referred_by FROM users WHERE user_id = ?", (user_id,))
@@ -719,68 +720,92 @@ async def show_my_purchases(callback: types.CallbackQuery):
     conn = sqlite3.connect("store_bot.db")
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT a.id, a.category, a.username, a.password FROM purchases p
+        SELECT a.category, a.username, a.password FROM purchases p
         JOIN accounts a ON p.account_id = a.id
         WHERE p.user_id = ?
     """, (user_id,))
-    purchased_accounts = cursor.fetchall()
+    purchases = cursor.fetchall()
     conn.close()
 
-    if not purchased_accounts:
+    if not purchases:
         builder = InlineKeyboardBuilder()
         builder.row(InlineKeyboardButton(text=t["btn_back"], callback_data="main_menu"))
         await callback.message.edit_text(t["no_purchases"], reply_markup=builder.as_markup())
         return
 
     builder = InlineKeyboardBuilder()
-    for acc_id, category, username, password in purchased_accounts:
-        builder.row(InlineKeyboardButton(text=f"🎮 {category}", callback_data=f"view_acc_{acc_id}"))
+    text = t["my_purchases_title"] + "\n\n"
+    for idx, (cat, uname, pword) in enumerate(purchases, 1):
+        text += f"{idx}. **{cat}**\n   👤 `{uname}`\n   🔑 `{pword}`\n\n"
 
     builder.row(InlineKeyboardButton(text=t["btn_back"], callback_data="main_menu"))
-    await callback.message.edit_text(t["my_purchases_title"], reply_markup=builder.as_markup())
+    await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="Markdown")
 
-@dp.callback_query(F.data.startswith("view_acc_"))
-async def view_purchased_account(callback: types.CallbackQuery):
-    user_id = callback.from_user.id
+# --- نظام التواصل المباشر مع المدير ---
+@dp.message(F.text & ~F.text.startswith("/"))
+async def handle_direct_messages(message: types.Message):
+    user_id = message.from_user.id
+    
+    if user_id == ADMIN_ID:
+        conn = sqlite3.connect("store_bot.db")
+        cursor = conn.cursor()
+        cursor.execute("SELECT active_target_user_id FROM admin_chat WHERE admin_id = ?", (ADMIN_ID,))
+        row = cursor.fetchone()
+        conn.close()
+        
+        if row and row[0]:
+            target_id = row[0]
+            try:
+                await bot.send_message(target_id, f"💬 **رد المدير:**\n\n{message.text}")
+                await message.react([types.ReactionTypeEmoji(emoji="👍")])
+            except Exception as e:
+                await message.answer(f"❌ تعذر إرسال الرسالة للمستخدم: {e}")
+        return
+
     if not await check_subscription(user_id):
         return
 
     try:
-        acc_id = int(callback.data.replace("view_acc_", ""))
-    except ValueError:
+        user_mention = f"[{message.from_user.full_name}](tg://user?id={user_id})"
+        username_str = f"@{message.from_user.username}" if message.from_user.username else "لا يوجد"
+        
+        builder = InlineKeyboardBuilder()
+        builder.row(
+            InlineKeyboardButton(text="💬 مراسلة هذا المستخدم", callback_data=f"admin_reply_{user_id}"),
+            InlineKeyboardButton(text="👤 فتح بروفайл المستخدم", url=f"tg://user?id={user_id}")
+        )
+        
+        admin_text = (
+            f"📩 **رسالة جديدة من مستخدم:**\n\n"
+            f"👤 الاسم: {user_mention}\n"
+            f"🏷️ المعرف: `{username_str}`\n"
+            f"🆔 الأي دي: `{user_id}`\n\n"
+            f"💬 النص المرسل:\n{message.text}"
+        )
+        
+        await bot.send_message(ADMIN_ID, admin_text, reply_markup=builder.as_markup(), parse_mode="Markdown")
+        await message.react([types.ReactionTypeEmoji(emoji="✍️")])
+    except Exception as e:
+        logging.error(f"Failed to forward message to admin: {e}")
+
+@dp.callback_query(F.data.startswith("admin_reply_"))
+async def admin_start_reply(callback: types.CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
         return
+    try:
+        target_id = int(callback.data.replace("admin_reply_", ""))
+        conn = sqlite3.connect("store_bot.db")
+        cursor = conn.cursor()
+        cursor.execute("INSERT OR REPLACE INTO admin_chat (admin_id, active_target_user_id) VALUES (?, ?)", (ADMIN_ID, target_id))
+        conn.commit()
+        conn.close()
+        
+        await callback.answer("✅ تم تفعيل الدردشة مع هذا المستخدم. أرسل رسالتك الآن وستصله فوراً.", show_alert=True)
+        await callback.message.answer(f"🟢 **أنت الآن في وضع الدردشة مع المستخدم (`{target_id}`)**\nأرسل أي رسالة هنا وسيتم إرسالها له مباشرة.\nلإنهاء الجلسة أرسل الأمر: `/end`")
+    except Exception as e:
+        await callback.answer(f"خطأ: {e}", show_alert=True)
 
-    lang = get_lang(user_id)
-    t = texts[lang]
-
-    conn = sqlite3.connect("store_bot.db")
-    cursor = conn.cursor()
-    # التحقق من أن الحساب ملك للمستخدم
-    cursor.execute("""
-        SELECT a.username, a.password FROM purchases p
-        JOIN accounts a ON p.account_id = a.id
-        WHERE p.user_id = ? AND a.id = ?
-    """, (user_id, acc_id))
-    acc = cursor.fetchone()
-    conn.close()
-
-    if not acc:
-        await callback.answer("❌ هذا الحساب غير موجود في قائمة مشترياتك.", show_alert=True)
-        return
-
-    username, password = acc
-    builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text=t["btn_back"], callback_data="my_purchases"))
-
-    await callback.message.edit_text(
-        t["success_redeem"].format(username, password),
-        reply_markup=builder.as_markup()
-    )
-
-# --- تشغيل البوت ---
 async def main():
-    print("Bot is starting...")
-    await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
