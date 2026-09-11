@@ -6,6 +6,7 @@ from aiogram.filters import Command, CommandStart
 from aiogram.types import InlineKeyboardButton, LabeledPrice
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
+# --- إعدادات البوت والمدير ---
 API_TOKEN = "8948074959:AAG5_PFOSO-pzNrZENuowrWA3HtdMyeIGfo"
 ADMIN_ID = 6266959915
 REQUIRED_CHANNELS = ["@r1iv_k"]
@@ -22,6 +23,7 @@ logging.basicConfig(level=logging.INFO)
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
 
+# --- قاعدة البيانات ---
 def init_db():
     conn = sqlite3.connect("store_bot.db")
     cursor = conn.cursor()
@@ -76,6 +78,7 @@ def init_db():
 
 init_db()
 
+# --- النصوص والترجمات ---
 texts = {
     "ar": {
         "welcome": "أهلاً بك في متجر r1ivk Store 🎮\nاختر لغتك المفضلة أو استعرض الأقسام الجديدة من القائمة أدناه 👇.\n\n💬 **ملاحظة:** لأي استفسار أو مشكلة، أرسل رسالتك هنا وسأتلقاها شخصياً فوراً.",
@@ -92,7 +95,7 @@ texts = {
         "my_purchases_title": "📁 **حساباتك المشراة (متاحة لك للأبد):**\n\nاضغط على الحساب لعرض بياناته متى شئت بدون خصم أي نقاط:",
         "no_purchases": "❌ لم تقم بشراء أي حسابات حتى الآن.",
         "no_accounts": "❌ عذراً، لا توجد حسابات متاحة حالياً في هذا القسم.",
-        "not_enough_points": "⚠️ نقاطك غير كافية! يلزمك المزيد من النقاط لفتح هذا الحساب.",
+        "not_enough_points": "⚠️ نقاطك غير كافية! يلزمك المزيد من نقاط لفتح هذا الحساب.",
         "success_redeem": "🎉 **مبروك! تم شراء الحساب بنجاح:**\n\n👤 **اسم المستخدم (Username):** `{}`\n🔑 **كلمة المرور (Password):**\n`{}`\n\n*(الحسابات هنا متوفرة بلا حدود وتعمل دائماً)*",
         "btn_back": "⬅️ رجوع للقائمة الرئيسية",
         "btn_share": "📤 مشاركة الرابط مع الأصدقاء",
@@ -330,6 +333,7 @@ async def cmd_start(message: types.Message):
         await message.answer(t["sub_required"], reply_markup=builder.as_markup(), disable_web_page_preview=True)
         return
 
+    # منح النقاط للمُحيل فور التحقق إن كان مشتركاً وصار نشطاً
     conn = sqlite3.connect("store_bot.db")
     cursor = conn.cursor()
     cursor.execute("SELECT lang, referred_by FROM users WHERE user_id = ?", (user_id,))
@@ -599,6 +603,75 @@ async def points_payment_success(message: types.Message):
     builder.row(InlineKeyboardButton(text=texts[lang]["btn_back"], callback_data="main_menu"))
     await message.answer(text, reply_markup=builder.as_markup())
 
+@dp.callback_query(F.data == "my_purchases")
+async def show_my_purchases(callback: types.CallbackQuery):
+    await callback.answer()
+    user_id = callback.from_user.id
+    if not await check_subscription(user_id):
+        return
+
+    lang = get_lang(user_id)
+    t = texts[lang]
+
+    conn = sqlite3.connect("store_bot.db")
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT a.id, a.category, a.username, a.password FROM purchases p
+        JOIN accounts a ON p.account_id = a.id
+        WHERE p.user_id = ?
+    """, (user_id,))
+    purchased_accounts = cursor.fetchall()
+    conn.close()
+
+    if not purchased_accounts:
+        builder = InlineKeyboardBuilder()
+        builder.row(InlineKeyboardButton(text=t["btn_back"], callback_data="main_menu"))
+        await callback.message.edit_text(t["no_purchases"], reply_markup=builder.as_markup())
+        return
+
+    builder = InlineKeyboardBuilder()
+    for acc_id, cat, username, password in purchased_accounts:
+        builder.row(InlineKeyboardButton(text=f"📁 حساب: {cat}", callback_data=f"show_acc_{acc_id}"))
+
+    builder.row(InlineKeyboardButton(text=t["btn_back"], callback_data="main_menu"))
+    await callback.message.edit_text(t["my_purchases_title"], reply_markup=builder.as_markup())
+
+@dp.callback_query(F.data.startswith("show_acc_"))
+async def show_purchased_account_details(callback: types.CallbackQuery):
+    await callback.answer()
+    user_id = callback.from_user.id
+    if not await check_subscription(user_id):
+        return
+
+    try:
+        acc_id = int(callback.data.split("_")[2])
+    except (ValueError, IndexError):
+        return
+
+    conn = sqlite3.connect("store_bot.db")
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT a.username, a.password FROM purchases p
+        JOIN accounts a ON p.account_id = a.id
+        WHERE p.user_id = ? AND a.id = ?
+    """, (user_id, acc_id))
+    acc = cursor.fetchone()
+    conn.close()
+
+    if not acc:
+        await callback.answer("❌ هذا الحساب غير موجود في مشترياتك.", show_alert=True)
+        return
+
+    username, password = acc
+    lang = get_lang(user_id)
+    t = texts[lang]
+
+    text = f"🔐 **بيانات الحساب المشرى:**\n\n👤 **المستخدم:** `{username}`\n🔑 **كلمة المرور:** `{password}`"
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text="⬅️ العودة لحساباتي", callback_data="my_purchases"))
+
+    await callback.message.edit_text(text, reply_markup=builder.as_markup())
+
 @dp.callback_query(F.data == "redeem_menu")
 async def redeem_menu(callback: types.CallbackQuery):
     await callback.answer()
@@ -629,7 +702,7 @@ async def redeem_menu(callback: types.CallbackQuery):
     builder.row(InlineKeyboardButton(text="🏎️ GTA V Account (4 pts)", callback_data="redeem_gta"))
     builder.row(InlineKeyboardButton(text="💻 Watch Dogs (3 pts)", callback_data="redeem_watchdogs"))
     builder.row(InlineKeyboardButton(text="🎁 Custom Account (3 pts)", callback_data="redeem_custom_user"))
-    builder.row(InlineGradeButton := InlineKeyboardButton(text="🌫️ Silent Hill f Deluxe (8 pts)", callback_data="redeem_silenthill"))
+    builder.row(InlineKeyboardButton(text="🌫️ Silent Hill f Deluxe (8 pts)", callback_data="redeem_silenthill"))
     builder.row(InlineKeyboardButton(text=t["btn_back"], callback_data="main_menu"))
 
     await callback.message.edit_text(t["redeem_title"], reply_markup=builder.as_markup())
@@ -698,18 +771,36 @@ async def process_redeem(callback: types.CallbackQuery):
     finally:
         conn.close()
 
-    await callback.message.edit_text(
-        t["success_redeem"].format(username, password),
-        reply_markup=InlineKeyboardBuilder().row(InlineKeyboardButton(text=t["btn_back"], callback_data="main_menu")).as_markup()
-    )
+    success_text = t["success_redeem"].format(username, password)
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text=t["btn_back"], callback_data="main_menu"))
+    await callback.message.edit_text(success_text, reply_markup=builder.as_markup())
 
-# --- نظام استقبال رسائل الدعم الفني وتعديل الشكل والتنبيهات ---
+# --- نظام تحويل رسائل المستخدمين للمشرف والرد عليها ---
+@dp.callback_query(F.data.startswith("reply_user_"))
+async def admin_start_reply(callback: types.CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        return
+    target_user_id = int(callback.data.split("_")[2])
+    
+    conn = sqlite3.connect("store_bot.db")
+    cursor = conn.cursor()
+    cursor.execute("INSERT OR REPLACE INTO admin_chat (admin_id, active_target_user_id) VALUES (?, ?)", (ADMIN_ID, target_user_id))
+    conn.commit()
+    conn.close()
+
+    await callback.answer()
+    await callback.message.answer(f"✍️ أرسل ردك الآن للمستخدم (آيدي: `{target_user_id}`):\n(أو اكتب `/end` لإنهاء وضع الدردشة)")
+
 @dp.message(F.chat.type == "private")
 async def handle_user_or_admin_messages(message: types.Message):
     user_id = message.from_user.id
 
-    # إذا كان المرسل هو الأدمن ويرد على مستخدم في وضع الدردشة المباشرة
+    # إذا كان المرسل هو المشرف ويقوم بالرد على مستخدم
     if user_id == ADMIN_ID:
+        if message.text and message.text.startswith("/"):
+            return  # تجاهل الأوامر الأخرى
+
         conn = sqlite3.connect("store_bot.db")
         cursor = conn.cursor()
         cursor.execute("SELECT active_target_user_id FROM admin_chat WHERE admin_id = ?", (ADMIN_ID,))
@@ -718,76 +809,42 @@ async def handle_user_or_admin_messages(message: types.Message):
 
         if row and row[0]:
             target_user_id = row[0]
-            if message.text and message.text.startswith("/"):
-                return  # السماح بتنفيذ الأوامر العادية للأدمن
-
             try:
-                if message.text:
-                    await bot.send_message(chat_id=target_user_id, text=f"💬 **رد من الإدارة:**\n\n{message.text}")
-                elif message.photo:
-                    await bot.send_photo(chat_id=target_user_id, photo=message.photo[-1].file_id, caption=message.caption or "")
-                elif message.video:
-                    await bot.send_video(chat_id=target_user_id, video=message.video.file_id, caption=message.caption or "")
-                elif message.document:
-                    await bot.send_document(chat_id=target_user_id, document=message.document.file_id, caption=message.caption or "")
-                
-                await message.reply("✅ تم إرسال الرد للمستخدم بنجاح.")
+                await bot.send_message(chat_id=target_user_id, text=f"💬 **رد المدير:**\n{message.text}")
+                await message.answer("✅ تم إرسال الرد للمستخدم بنجاح.")
             except Exception as e:
-                await message.reply(f"❌ فشل إرسال الرد للمستخدم: {e}")
-            return
-
-    # إذا كان المستخدم العادي يرسل رسالة للبوت (تعديل شكل الإشعار للأدمن بالشكل المطلوب تماماً)
-    if user_id != ADMIN_ID:
-        if message.text and message.text.startswith("/"):
-            return
-
-        user_name = message.from_user.full_name
-        user_username = f"@{message.from_user.username}" if message.from_user.username else "لا يوجد"
-        
-        builder = InlineKeyboardBuilder()
-        builder.row(
-            InlineKeyboardButton(text="💬 مراسلة هذا المستخدم", callback_data=f"reply_to_{user_id}"),
-            InlineKeyboardButton(text="👤 فتح بروفайл المستخدم", url=tg_url := f"tg://user?id={user_id}")
-        )
-
-        notification_text = (
-            f"📩 **رسالة جديدة من مستخدم:**\n\n"
-            f"👤 **الاسم:** {user_name}\n"
-            f"🏷️ **المعرفة:** {user_username}\n"
-            f"🆔 **الأيدي:** `{user_id}`\n\n"
-            f"💬 **النص المرسل:**\n{message.text or '[محتوى مرئي/ملف]'}"
-        )
-
-        try:
-            await bot.send_message(chat_id=ADMIN_ID, text=notification_text, reply_markup=builder.as_markup())
-            lang = get_lang(user_id)
-            confirmation = "✅ تم إرسال رسالتك إلى إدارة المتجر بنجاح. سيتم الرد عليك قريباً!" if lang == "ar" else "✅ Your message has been sent to support. We will reply soon!"
-            await message.answer(confirmation)
-        except Exception as e:
-            logging.error(f"Failed to forward message to admin: {e}")
-
-@dp.callback_query(F.data.startswith("reply_to_"))
-async def admin_start_chat(callback: types.CallbackQuery):
-    if callback.from_user.id != ADMIN_ID:
-        await callback.answer("للمدير فقط", show_alert=True)
+                await message.answer(f"❌ فشل إرسال الرد: {e}")
         return
 
-    target_user_id = int(callback.data.split("_")[2])
+    # إذا كان المستخدم العادي يرسل رسالة استفسار للبوت
+    if not await check_subscription(user_id):
+        return
 
-    conn = sqlite3.connect("store_bot.db")
-    cursor = conn.cursor()
-    cursor.execute("INSERT OR REPLACE INTO admin_chat (admin_id, active_target_user_id) VALUES (?, ?)", (ADMIN_ID, target_user_id))
-    conn.commit()
-    conn.close()
-
-    await callback.answer("تم تفعيل وضع الدردشة مع هذا المستخدم", show_alert=True)
-    await callback.message.answer(
-        f"🟢 **تم فتح محادثة مباشرة مع المستخدم (`{target_user_id}`)**\n\n"
-        f"اكتب رسالتك الآن وستم إرسالها له مباشرة.\n"
-        f"لإيقاف المحادثة وإنهاء الوضع، أرسل الأمر: /end"
+    user_name = message.from_user.full_name
+    username = f"@{message.from_user.username}" if message.from_user.username else "لا يوجد"
+    
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(text="💬 مراسلة المستخدم", callback_data=f"reply_user_{user_id}"),
+        InlineKeyboardButton(text="👤 فتح بروفايل المستخدم", url=f"tg://user?id={user_id}")
     )
 
+    admin_msg = (
+        f"📩 **رسالة جديدة من مستخدم:**\n\n"
+        f"👤 الاسم: {user_name}\n"
+        f"🏷️ المعرف: {username}\n"
+        f"🆔 الآيدي: `{user_id}`\n\n"
+        f"💬 النص المرسل:\n{message.text or '[محتوى غير نصي]'}"
+    )
+
+    try:
+        await bot.send_message(chat_id=ADMIN_ID, text=admin_msg, reply_markup=builder.as_markup())
+        await message.answer("✅ تم إرسال رسالتك إلى الإدارة بنجاح، سيتم الرد عليك قريباً.")
+    except Exception as e:
+        logging.error(f"Failed to forward message to admin: {e}")
+
 async def main():
+    await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
