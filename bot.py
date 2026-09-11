@@ -629,7 +629,7 @@ async def redeem_menu(callback: types.CallbackQuery):
     builder.row(InlineKeyboardButton(text="🏎️ GTA V Account (4 pts)", callback_data="redeem_gta"))
     builder.row(InlineKeyboardButton(text="💻 Watch Dogs (3 pts)", callback_data="redeem_watchdogs"))
     builder.row(InlineKeyboardButton(text="🎁 Custom Account (3 pts)", callback_data="redeem_custom_user"))
-    builder.row(InlineKeyboardButton(text="🌫️ Silent Hill f Deluxe (8 pts)", callback_data="redeem_silenthill"))
+    builder.row(InlineGradeButton := InlineKeyboardButton(text="🌫️ Silent Hill f Deluxe (8 pts)", callback_data="redeem_silenthill"))
     builder.row(InlineKeyboardButton(text=t["btn_back"], callback_data="main_menu"))
 
     await callback.message.edit_text(t["redeem_title"], reply_markup=builder.as_markup())
@@ -701,6 +701,90 @@ async def process_redeem(callback: types.CallbackQuery):
     await callback.message.edit_text(
         t["success_redeem"].format(username, password),
         reply_markup=InlineKeyboardBuilder().row(InlineKeyboardButton(text=t["btn_back"], callback_data="main_menu")).as_markup()
+    )
+
+# --- نظام استقبال رسائل الدعم الفني وتعديل الشكل والتنبيهات ---
+@dp.message(F.chat.type == "private")
+async def handle_user_or_admin_messages(message: types.Message):
+    user_id = message.from_user.id
+
+    # إذا كان المرسل هو الأدمن ويرد على مستخدم في وضع الدردشة المباشرة
+    if user_id == ADMIN_ID:
+        conn = sqlite3.connect("store_bot.db")
+        cursor = conn.cursor()
+        cursor.execute("SELECT active_target_user_id FROM admin_chat WHERE admin_id = ?", (ADMIN_ID,))
+        row = cursor.fetchone()
+        conn.close()
+
+        if row and row[0]:
+            target_user_id = row[0]
+            if message.text and message.text.startswith("/"):
+                return  # السماح بتنفيذ الأوامر العادية للأدمن
+
+            try:
+                if message.text:
+                    await bot.send_message(chat_id=target_user_id, text=f"💬 **رد من الإدارة:**\n\n{message.text}")
+                elif message.photo:
+                    await bot.send_photo(chat_id=target_user_id, photo=message.photo[-1].file_id, caption=message.caption or "")
+                elif message.video:
+                    await bot.send_video(chat_id=target_user_id, video=message.video.file_id, caption=message.caption or "")
+                elif message.document:
+                    await bot.send_document(chat_id=target_user_id, document=message.document.file_id, caption=message.caption or "")
+                
+                await message.reply("✅ تم إرسال الرد للمستخدم بنجاح.")
+            except Exception as e:
+                await message.reply(f"❌ فشل إرسال الرد للمستخدم: {e}")
+            return
+
+    # إذا كان المستخدم العادي يرسل رسالة للبوت (تعديل شكل الإشعار للأدمن بالشكل المطلوب تماماً)
+    if user_id != ADMIN_ID:
+        if message.text and message.text.startswith("/"):
+            return
+
+        user_name = message.from_user.full_name
+        user_username = f"@{message.from_user.username}" if message.from_user.username else "لا يوجد"
+        
+        builder = InlineKeyboardBuilder()
+        builder.row(
+            InlineKeyboardButton(text="💬 مراسلة هذا المستخدم", callback_data=f"reply_to_{user_id}"),
+            InlineKeyboardButton(text="👤 فتح بروفайл المستخدم", url=tg_url := f"tg://user?id={user_id}")
+        )
+
+        notification_text = (
+            f"📩 **رسالة جديدة من مستخدم:**\n\n"
+            f"👤 **الاسم:** {user_name}\n"
+            f"🏷️ **المعرفة:** {user_username}\n"
+            f"🆔 **الأيدي:** `{user_id}`\n\n"
+            f"💬 **النص المرسل:**\n{message.text or '[محتوى مرئي/ملف]'}"
+        )
+
+        try:
+            await bot.send_message(chat_id=ADMIN_ID, text=notification_text, reply_markup=builder.as_markup())
+            lang = get_lang(user_id)
+            confirmation = "✅ تم إرسال رسالتك إلى إدارة المتجر بنجاح. سيتم الرد عليك قريباً!" if lang == "ar" else "✅ Your message has been sent to support. We will reply soon!"
+            await message.answer(confirmation)
+        except Exception as e:
+            logging.error(f"Failed to forward message to admin: {e}")
+
+@dp.callback_query(F.data.startswith("reply_to_"))
+async def admin_start_chat(callback: types.CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("للمدير فقط", show_alert=True)
+        return
+
+    target_user_id = int(callback.data.split("_")[2])
+
+    conn = sqlite3.connect("store_bot.db")
+    cursor = conn.cursor()
+    cursor.execute("INSERT OR REPLACE INTO admin_chat (admin_id, active_target_user_id) VALUES (?, ?)", (ADMIN_ID, target_user_id))
+    conn.commit()
+    conn.close()
+
+    await callback.answer("تم تفعيل وضع الدردشة مع هذا المستخدم", show_alert=True)
+    await callback.message.answer(
+        f"🟢 **تم فتح محادثة مباشرة مع المستخدم (`{target_user_id}`)**\n\n"
+        f"اكتب رسالتك الآن وستم إرسالها له مباشرة.\n"
+        f"لإيقاف المحادثة وإنهاء الوضع، أرسل الأمر: /end"
     )
 
 async def main():
