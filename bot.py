@@ -7,7 +7,7 @@ from aiogram.types import InlineKeyboardButton, LabeledPrice
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 # --- إعدادات البوت والمدير ---
-API_TOKEN = "8948074959:AAG5_PFOSO-pzNrZENuowrWA3HtdMyeIGfo"
+API_TOKEN = "8948074959:AAGRPxXyrAuKPtoA0oFr8ZNKaW7SpFxFbdQ"
 ADMIN_ID = 6266959915
 REQUIRED_CHANNELS = ["@r1iv_k"]
 
