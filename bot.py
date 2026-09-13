@@ -10,7 +10,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 # ============================================================
 # --- إعدادات البوت والمدير ---
 # ============================================================
-API_TOKEN = "8852527009:AAGm909nYrGQM-QZW9VlVW9MJV1Zr2kgKa4ا"
+API_TOKEN = "8852527009:AAGm909nYrGQM-QZW9VlVW9MJV1Zr2kgKa4"
 ADMIN_ID = 8919826699
 REQUIRED_CHANNELS = ["@r1ivk_giveaway"]
 CHANNEL_LINK = "https://t.me/r1ivk_giveaway"
