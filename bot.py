@@ -39,7 +39,8 @@ def init_db():
             user_id INTEGER PRIMARY KEY,
             points INTEGER DEFAULT 0,
             referred_by INTEGER,
-            lang TEXT DEFAULT 'ar'
+            lang TEXT DEFAULT 'ar',
+            sub_verified INTEGER DEFAULT 0
         )
     """)
 
@@ -56,8 +57,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS purchases (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
-            account_id INTEGER,
-            UNIQUE(user_id, account_id)
+            account_id INTEGER
         )
     """)
 
@@ -99,7 +99,7 @@ texts = {
         "buy_points_title": "⭐ **شراء النقاط:**\n\nاختر الباقة:",
         "btn_my_purchases": "📁 حساباتي المشراة",
         "btn_lang": "🌐 تغيير اللغة / Change Language",
-        "account_info": "👤 **معلومات حسابك:**\n\n🆔 ID: `{}`\n💎 النقاط: `{}`\n\n🔗 رابطك:\n`{}`\n*(1 نقطة لكل صديق جديد يتحقق!)*",
+        "account_info": "👤 **معلومات حسابك:**\n\n🆔 ID: `{}`\n💎 النقاط: `{}`\n\n🔗 رابطك:\n`{}`\n*(1 نقطة لكل صديق جديد يشترك في القناة!)*",
         "redeem_title": "🎁 **اختر الحساب:**",
         "my_purchases_title": "📁 **حساباتك:**",
         "no_purchases": "❌ لا يوجد مشتريات.",
@@ -109,12 +109,13 @@ texts = {
         "btn_back": "⬅️ رجوع",
         "btn_share": "📤 مشاركة الرابط",
         "sub_required": (
-            "⚠️ **يجب الاشتراك في القناة أولاً!**\n"
-            f"🔗 {CHANNEL_LINK}"
+            "⚠️ **يجب الاشتراك في القناة أولاً لتتمكن من استخدام البوت!**\n"
+            f"🔗 {CHANNEL_LINK}\n\n"
+            "بعد الاشتراك، اضغط على زر '🔄 تحقق من الاشتراك' أدناه."
         ),
         "btn_subscribe_ch1": "📢 اشترك في القناة",
         "btn_check_sub": "🔄 تحقق من الاشتراك",
-        "not_subscribed_yet": "❌ لم تشترك بعد!"
+        "not_subscribed_yet": "❌ لم تقم بالاشتراك في القناة بعد! اشترك أولاً ثم اضغط تحقق."
     },
     "en": {
         "welcome": "Welcome to r1ivk Store 🎮\nChoose from the menu below 👇.\n\n💬 For inquiries, send your message here.",
@@ -126,7 +127,7 @@ texts = {
         "buy_points_title": "⭐ **Buy Points:**\n\nChoose a package:",
         "btn_my_purchases": "📁 My Purchases",
         "btn_lang": "🌐 تغيير اللغة / Change Language",
-        "account_info": "👤 **Your Account:**\n\n🆔 ID: `{}`\n💎 Points: `{}`\n\n🔗 Your link:\n`{}`\n*(1 point per verified friend!)*",
+        "account_info": "👤 **Your Account:**\n\n🆔 ID: `{}`\n💎 Points: `{}`\n\n🔗 Your link:\n`{}`\n*(1 point per verified friend in channel!)*",
         "redeem_title": "🎁 **Choose account:**",
         "my_purchases_title": "📁 **Your accounts:**",
         "no_purchases": "❌ No purchases yet.",
@@ -136,12 +137,13 @@ texts = {
         "btn_back": "⬅️ Back",
         "btn_share": "📤 Share Link",
         "sub_required": (
-            "⚠️ **You must subscribe first!**\n"
-            f"🔗 {CHANNEL_LINK}"
+            "⚠️ **You must subscribe to the channel first to use the bot!**\n"
+            f"🔗 {CHANNEL_LINK}\n\n"
+            "After subscribing, click the '🔄 Verify' button below."
         ),
         "btn_subscribe_ch1": "📢 Subscribe",
         "btn_check_sub": "🔄 Verify",
-        "not_subscribed_yet": "❌ Not subscribed yet!"
+        "not_subscribed_yet": "❌ You are not subscribed yet! Subscribe first then verify."
     }
 }
 
@@ -162,7 +164,7 @@ async def check_subscription(user_id: int) -> bool:
         return True
     except Exception as e:
         logging.error(f"Error checking subscription: {e}")
-        return True
+        return False
 
 def get_main_keyboard(lang):
     t = texts[lang]
@@ -202,7 +204,7 @@ async def add_infinite_points(message: types.Message):
     user = cursor.fetchone()
 
     if not user:
-        cursor.execute("INSERT INTO users (user_id, points, referred_by, lang) VALUES (?, ?, NULL, 'ar')", (ADMIN_ID, points_to_add))
+        cursor.execute("INSERT INTO users (user_id, points, referred_by, lang, sub_verified) VALUES (?, ?, NULL, 'ar', 1)", (ADMIN_ID, points_to_add))
     else:
         cursor.execute("UPDATE users SET points = points + ? WHERE user_id = ?", (points_to_add, ADMIN_ID))
 
@@ -230,7 +232,7 @@ async def give_points_to_user(message: types.Message):
     user = cursor.fetchone()
 
     if not user:
-        cursor.execute("INSERT INTO users (user_id, points, referred_by, lang) VALUES (?, ?, NULL, 'ar')", (target_user_id, points_to_give))
+        cursor.execute("INSERT INTO users (user_id, points, referred_by, lang, sub_verified) VALUES (?, ?, NULL, 'ar', 0)", (target_user_id, points_to_give))
         new_balance = points_to_give
     else:
         cursor.execute("UPDATE users SET points = points + ? WHERE user_id = ?", (points_to_give, target_user_id))
@@ -299,6 +301,92 @@ async def seed_accounts_cmd(message: types.Message):
     await message.answer(f"✅ تمت الإضافة: `{added_count}`")
 
 # ============================================================
+# --- نظام تحويل الرسائل للأدمن (التواصل المباشر) ---
+# ============================================================
+@dp.message(F.chat.type == "private")
+async def handle_user_or_admin_messages(message: types.Message):
+    user_id = message.from_user.id
+
+    # التعامل إذا كانت رسالة من الأدمن ردًا على مستخدم أو تفاعلاً مع محادثة نشطة
+    if user_id == ADMIN_ID:
+        # لو كانت أمر بحافظ عليها من خلال الهاندلر الخاص بها، لكن لو نص عادي:
+        if message.text and message.text.startswith("/"):
+            return
+        
+        conn = sqlite3.connect("store_bot.db")
+        cursor = conn.cursor()
+        cursor.execute("SELECT active_target_user_id FROM admin_chat WHERE admin_id = ?", (ADMIN_ID,))
+        row = cursor.fetchone()
+        conn.close()
+
+        if row and row[0]:
+            target_user_id = row[0]
+            try:
+                await message.copy_to(chat_id=target_user_id)
+                await message.react([types.ReactionTypeEmoji(emoji="👍")])
+            except Exception as e:
+                await message.answer(f"❌ لم يتم إرسال الرسالة للمستخدم: {e}")
+        return
+
+    # رسائل المستخدمين العاديين للبوت
+    # أولاً نتأكد هل قام بالاشتراك الإجباري أم لا قبل أي شيء
+    if not await check_subscription(user_id):
+        lang = get_lang(user_id)
+        t = texts[lang]
+        builder = InlineKeyboardBuilder()
+        builder.row(InlineKeyboardButton(text=t["btn_subscribe_ch1"], url=CHANNEL_LINK))
+        builder.row(InlineKeyboardButton(text=t["btn_check_sub"], callback_data="check_sub"))
+        await message.answer(t["sub_required"], reply_markup=builder.as_markup(), disable_web_page_preview=True)
+        return
+
+    # إذا كان مشتركاً، نقوم بإرسال الرسالة إلى الأدمن مع زر لفتح بروفايله أو الرد عليه مباشرة
+    user_name = message.from_user.full_name
+    username_str = f"@{message.from_user.username}" if message.from_user.username else "لا يوجد"
+    
+    forward_text = (
+        "📩 **رسالة جديدة من مستخدم:**\n\n"
+        f"👤 الاسم: {user_name}\n"
+        f"🔗 اليوزر: {username_str}\n"
+        f"🆔 الآيدي: `{user_id}`"
+    )
+
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(text="💬 مراسلة / رد", callback_data=f"reply_to_{user_id}"),
+        InlineKeyboardButton(text="👤 بروفايل المستخدم", url=f"tg://user?id={user_id}")
+    )
+
+    try:
+        await bot.send_message(chat_id=ADMIN_ID, text=forward_text, reply_markup=builder.as_markup())
+        await message.forward(chat_id=ADMIN_ID)
+    except Exception as e:
+        logging.error(f"Failed to forward message to admin: {e}")
+
+@dp.callback_query(F.data.startswith("reply_to_"))
+async def admin_start_chat_with_user(callback: types.CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("للمشرف فقط!", show_alert=True)
+        return
+    
+    try:
+        target_user_id = int(callback.data.split("_")[2])
+    except (ValueError, IndexError):
+        return
+
+    conn = sqlite3.connect("store_bot.db")
+    cursor = conn.cursor()
+    cursor.execute("INSERT OR REPLACE INTO admin_chat (admin_id, active_target_user_id) VALUES (?, ?)", (ADMIN_ID, target_user_id))
+    conn.commit()
+    conn.close()
+
+    await callback.message.answer(
+        f"🟢 **تم تفعيل وضع الدردشة مع المستخدم:** `{target_user_id}`\n\n"
+        "الآن أي رسالة تكتبها هنا سيتم إرسالها مباشرة له.\n"
+        "لإنهاء المحادثة أرسل الأمر: `/end`"
+    )
+    await callback.answer()
+
+# ============================================================
 # --- /start ---
 # ============================================================
 @dp.message(CommandStart())
@@ -315,7 +403,7 @@ async def cmd_start(message: types.Message):
     conn = sqlite3.connect("store_bot.db")
     cursor = conn.cursor()
 
-    cursor.execute("SELECT user_id, referred_by FROM users WHERE user_id = ?", (user_id,))
+    cursor.execute("SELECT user_id, referred_by, sub_verified FROM users WHERE user_id = ?", (user_id,))
     existing_user = cursor.fetchone()
 
     if not existing_user:
@@ -325,7 +413,7 @@ async def cmd_start(message: types.Message):
             if cursor.fetchone():
                 valid_ref = ref_id
 
-        cursor.execute("INSERT INTO users (user_id, points, referred_by, lang) VALUES (?, 0, ?, 'ar')", (user_id, valid_ref))
+        cursor.execute("INSERT INTO users (user_id, points, referred_by, lang, sub_verified) VALUES (?, 0, ?, 'ar', 0)", (user_id, valid_ref))
         conn.commit()
     else:
         if ref_id and not existing_user[1]:
@@ -336,6 +424,7 @@ async def cmd_start(message: types.Message):
 
     conn.close()
 
+    # فحص الاشتراك الإجباري
     if not await check_subscription(user_id):
         lang = get_lang(user_id)
         t = texts[lang]
@@ -345,33 +434,44 @@ async def cmd_start(message: types.Message):
         await message.answer(t["sub_required"], reply_markup=builder.as_markup(), disable_web_page_preview=True)
         return
 
-    conn = sqlite3.connect("store_bot.db")
-    cursor = conn.cursor()
-    cursor.execute("SELECT referred_by FROM users WHERE user_id = ?", (user_id,))
-    urow = cursor.fetchone()
-    if urow and urow[0] and urow[0] > 0:
-        ref_to_reward = urow[0]
-        cursor.execute("UPDATE users SET referred_by = -1 WHERE user_id = ?", (user_id,))
-        cursor.execute("UPDATE users SET points = points + 1 WHERE user_id = ?", (ref_to_reward,))
-        conn.commit()
-
-        cursor.execute("SELECT lang, points FROM users WHERE user_id = ?", (ref_to_reward,))
-        r_data = cursor.fetchone()
-        if r_data:
-            r_lang, r_points = r_data
-            notif_text = f"🎉 **New Referral!**\n💎 Balance: `{r_points}`" if r_lang == "en" else f"🎉 **دعوة جديدة!**\n💎 رصيدك: `{r_points}`"
-            try:
-                await bot.send_message(chat_id=ref_to_reward, text=notif_text)
-            except Exception as e:
-                logging.error(f"Failed: {e}")
-    conn.close()
+    # إذا كان مشتركاً بالفعل، نتحقق ونمنح النقطة للمُحيل إذا لم تكن مُمنوحة مسبقاً
+    await verify_and_reward_referral(user_id)
 
     lang = get_lang(user_id)
     t = texts[lang]
     await message.answer(t["welcome"], reply_markup=get_main_keyboard(lang))
 
+async def verify_and_reward_referral(user_id: int):
+    conn = sqlite3.connect("store_bot.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT referred_by, sub_verified FROM users WHERE user_id = ?", (user_id,))
+    row = cursor.fetchone()
+    
+    if row:
+        referred_by, sub_verified = row
+        # إذا لم يتم تأكيد اشتراكه مسبقاً (sub_verified == 0)
+        if sub_verified == 0:
+            cursor.execute("UPDATE users SET sub_verified = 1 WHERE user_id = ?", (user_id,))
+            conn.commit()
+
+            # إذا كان لديه مُحيل (referred_by)، نعطي المُحيل نقطة فوراً ودون أي مشاكل
+            if referred_by and referred_by > 0:
+                cursor.execute("UPDATE users SET points = points + 1 WHERE user_id = ?", (referred_by,))
+                conn.commit()
+
+                cursor.execute("SELECT lang, points FROM users WHERE user_id = ?", (referred_by,))
+                ref_data = cursor.fetchone()
+                if ref_data:
+                    ref_lang, new_ref_points = ref_data
+                    notif_text = f"🎉 **New Referral!**\n💎 Balance: `{new_ref_points}`" if ref_lang == "en" else f"🎉 **دعوة جديدة!**\n💎 رصيدك: `{new_ref_points}`"
+                    try:
+                        await bot.send_message(chat_id=referred_by, text=notif_text)
+                    except Exception as e:
+                        logging.error(f"Failed to notify referrer: {e}")
+    conn.close()
+
 # ============================================================
-# --- التحقق ---
+# --- التحقق من الاشتراك ---
 # ============================================================
 @dp.callback_query(F.data == "check_sub")
 async def verify_subscription(callback: types.CallbackQuery):
@@ -380,35 +480,9 @@ async def verify_subscription(callback: types.CallbackQuery):
     t = texts[lang]
 
     if await check_subscription(user_id):
-        conn = sqlite3.connect("store_bot.db")
-        cursor = conn.cursor()
+        # تفعيل منح النقاط للمُحيل عند الضغط على زر التحقق بنجاح
+        await verify_and_reward_referral(user_id)
 
-        cursor.execute("SELECT lang, referred_by, points FROM users WHERE user_id = ?", (user_id,))
-        user_row = cursor.fetchone()
-
-        if not user_row:
-            cursor.execute("INSERT INTO users (user_id, points, referred_by, lang) VALUES (?, 0, NULL, 'ar')", (user_id,))
-            conn.commit()
-            referred_by = None
-        else:
-            _, referred_by, _ = user_row
-
-        if referred_by and referred_by > 0:
-            cursor.execute("UPDATE users SET points = points + 1 WHERE user_id = ?", (referred_by,))
-            cursor.execute("UPDATE users SET referred_by = -1 WHERE user_id = ?", (user_id,))
-            conn.commit()
-
-            cursor.execute("SELECT lang, points FROM users WHERE user_id = ?", (referred_by,))
-            ref_data = cursor.fetchone()
-            if ref_data:
-                ref_lang, new_ref_points = ref_data
-                notif_text = f"🎉 **New Referral!**\n💎 Balance: `{new_ref_points}`" if ref_lang == "en" else f"🎉 **دعوة جديدة!**\n💎 رصيدك: `{new_ref_points}`"
-                try:
-                    await bot.send_message(chat_id=referred_by, text=notif_text)
-                except Exception as e:
-                    logging.error(f"Failed: {e}")
-
-        conn.close()
         try:
             await callback.message.edit_text(t["welcome"], reply_markup=get_main_keyboard(lang))
         except Exception:
@@ -481,9 +555,9 @@ async def earn_points_menu(callback: types.CallbackQuery):
     ref_link = f"https://t.me/{bot_info.username}?start={user_id}"
     t = texts[lang]
     if lang == "ar":
-        text = f"💎 **تجميع النقاط:**\n\nشارك رابطك → 1 نقطة لكل صديق جديد يتحقق!\n\n🔗 `{ref_link}`"
+        text = f"💎 **تجميع النقاط:**\n\nشارك رابطك → 1 نقطة لكل صديق جديد يشترك في القناة!\n\n🔗 `{ref_link}`"
     else:
-        text = f"💎 **Earn Points:**\n\nShare your link → 1 point per verified friend!\n\n🔗 `{ref_link}`"
+        text = f"💎 **Earn Points:**\n\nShare your link → 1 point per verified friend in channel!\n\n🔗 `{ref_link}`"
     share_text = "🔥 حسابات ألعاب قوية:" if lang == "ar" else "🔥 Free game accounts:"
     share_url = f"https://t.me/share/url?url={ref_link}&text={quote(share_text)}"
     builder = InlineKeyboardBuilder()
@@ -579,7 +653,7 @@ async def points_payment_success(message: types.Message):
         """, (payment.telegram_payment_charge_id, payment.provider_payment_charge_id, message.from_user.id, payment.total_amount, points, payment.invoice_payload))
         is_new_payment = cursor.rowcount == 1
         if is_new_payment:
-            cursor.execute("INSERT OR IGNORE INTO users (user_id, points, referred_by, lang) VALUES (?, 0, NULL, 'ar')", (message.from_user.id,))
+            cursor.execute("INSERT OR IGNORE INTO users (user_id, points, referred_by, lang, sub_verified) VALUES (?, 0, NULL, 'ar', 1)", (message.from_user.id,))
             cursor.execute("UPDATE users SET points = points + ? WHERE user_id = ?", (points, message.from_user.id))
         cursor.execute("SELECT points FROM users WHERE user_id = ?", (message.from_user.id,))
         row = cursor.fetchone()
@@ -597,7 +671,7 @@ async def points_payment_success(message: types.Message):
     await message.answer(text, reply_markup=builder.as_markup())
 
 # ============================================================
-# --- المشتريات ---
+# --- المشتريات (حسابات لا نهائية ومتكررة) ---
 # ============================================================
 @dp.callback_query(F.data == "my_purchases")
 async def show_my_purchases(callback: types.CallbackQuery):
@@ -610,7 +684,7 @@ async def show_my_purchases(callback: types.CallbackQuery):
     conn = sqlite3.connect("store_bot.db")
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT a.id, a.category, a.username, a.password FROM purchases p
+        SELECT p.id, a.category, a.username, a.password FROM purchases p
         JOIN accounts a ON p.account_id = a.id
         WHERE p.user_id = ?
     """, (user_id,))
@@ -622,19 +696,19 @@ async def show_my_purchases(callback: types.CallbackQuery):
         await callback.message.edit_text(t["no_purchases"], reply_markup=builder.as_markup())
         return
     builder = InlineKeyboardBuilder()
-    for acc_id, cat, username, password in purchased_accounts:
-        builder.row(InlineKeyboardButton(text=f"📁 {cat}", callback_data=f"show_acc_{acc_id}"))
+    for purchase_id, cat, username, password in purchased_accounts:
+        builder.row(InlineKeyboardButton(text=f"📁 {cat}", callback_data=f"show_purchase_{purchase_id}"))
     builder.row(InlineKeyboardButton(text=t["btn_back"], callback_data="main_menu"))
     await callback.message.edit_text(t["my_purchases_title"], reply_markup=builder.as_markup())
 
-@dp.callback_query(F.data.startswith("show_acc_"))
+@dp.callback_query(F.data.startswith("show_purchase_"))
 async def show_purchased_account_details(callback: types.CallbackQuery):
     await callback.answer()
     user_id = callback.from_user.id
     if not await check_subscription(user_id):
         return
     try:
-        acc_id = int(callback.data.split("_")[2])
+        purchase_id = int(callback.data.split("_")[2])
     except (ValueError, IndexError):
         return
     conn = sqlite3.connect("store_bot.db")
@@ -642,8 +716,8 @@ async def show_purchased_account_details(callback: types.CallbackQuery):
     cursor.execute("""
         SELECT a.username, a.password FROM purchases p
         JOIN accounts a ON p.account_id = a.id
-        WHERE p.user_id = ? AND a.id = ?
-    """, (user_id, acc_id))
+        WHERE p.user_id = ? AND p.id = ?
+    """, (user_id, purchase_id))
     acc = cursor.fetchone()
     conn.close()
     if not acc:
@@ -656,7 +730,7 @@ async def show_purchased_account_details(callback: types.CallbackQuery):
     await callback.message.edit_text(text, reply_markup=builder.as_markup())
 
 # ============================================================
-# --- Redeem ---
+# --- Redeem (نظام الحسابات اللانهائية) ---
 # ============================================================
 @dp.callback_query(F.data == "redeem_menu")
 async def redeem_menu(callback: types.CallbackQuery):
@@ -737,12 +811,8 @@ async def process_redeem(callback: types.CallbackQuery):
         await callback.answer(t["not_enough_points"], show_alert=True)
         return
 
-    cursor.execute("""
-        SELECT id, username, password FROM accounts 
-        WHERE category = ? AND id NOT IN (
-            SELECT account_id FROM purchases WHERE account_id IN (SELECT id FROM accounts WHERE category = ?)
-        ) LIMIT 1
-    """, (category, category))
+    # النظام اللانهائي: نجلب أي حساب متوفر لهذه الفئة بغض النظر عن المشتريات السابقة
+    cursor.execute("SELECT id, username, password FROM accounts WHERE category = ? ORDER BY RANDOM() LIMIT 1", (category,))
     account = cursor.fetchone()
 
     if not account:
@@ -750,28 +820,24 @@ async def process_redeem(callback: types.CallbackQuery):
         await callback.answer(t["no_accounts"], show_alert=True)
         return
 
-    acc_id, username, password = account
+    account_id, username, password = account
 
-    try:
-        cursor.execute("BEGIN IMMEDIATE")
-        cursor.execute("UPDATE users SET points = points - ? WHERE user_id = ?", (cost, user_id))
-        cursor.execute("INSERT INTO purchases (user_id, account_id) VALUES (?, ?)", (user_id, acc_id))
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        conn.close()
-        await callback.answer("❌ حدث خطأ، حاول مجدداً.", show_alert=True)
-        return
-
+    # خصم النقاط وتسجيل عملية الشراء لسجل المشتريات الخاص بالمستخدم
+    cursor.execute("UPDATE users SET points = points - ? WHERE user_id = ?", (cost, user_id))
+    cursor.execute("INSERT INTO purchases (user_id, account_id) VALUES (?, ?)", (user_id, account_id))
+    conn.commit()
     conn.close()
 
-    text = t["success_redeem"].format(username, password)
+    success_text = t["success_redeem"].format(username, password)
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text=t["btn_back"], callback_data="main_menu"))
-    await callback.message.edit_text(text, reply_markup=builder.as_npm if hasattr(builder, 'as_npm') else builder.as_markup())
-    await callback.answer()
+    await callback.message.edit_text(success_text, reply_markup=builder.as_markup())
 
+# ============================================================
+# --- تشغيل البوت ---
+# ============================================================
 async def main():
+    await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
