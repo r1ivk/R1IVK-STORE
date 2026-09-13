@@ -345,7 +345,6 @@ async def cmd_start(message: types.Message):
         await message.answer(t["sub_required"], reply_markup=builder.as_markup(), disable_web_page_preview=True)
         return
 
-    # ✅ منح النقاط للمُحيل إذا المستخدم جديد ومشترك أصلاً
     conn = sqlite3.connect("store_bot.db")
     cursor = conn.cursor()
     cursor.execute("SELECT referred_by FROM users WHERE user_id = ?", (user_id,))
@@ -703,3 +702,77 @@ async def process_redeem(callback: types.CallbackQuery):
     category = callback.data.replace("redeem_", "", 1)
 
     costs = {
+        "spiderman_all": 30,
+        "re4remake": 18,
+        "godofwar": 12,
+        "cyberpunk": 12,
+        "requiem": 10,
+        "silenthill": 8,
+        "rdr2": 6,
+        "fifa26": 6,
+        "thelastofus": 6,
+        "miles": 6,
+        "forza": 6,
+        "forza5": 6,
+        "tsushima": 6,
+        "batman": 6,
+        "naruto": 6,
+        "plague1": 6,
+        "plague2": 6,
+        "gta": 4,
+        "watchdogs": 3,
+        "custom_user": 3
+    }
+
+    cost = costs.get(category, 999)
+
+    conn = sqlite3.connect("store_bot.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT points FROM users WHERE user_id = ?", (user_id,))
+    row = cursor.fetchone()
+    user_points = row[0] if row else 0
+
+    if user_points < cost:
+        conn.close()
+        await callback.answer(t["not_enough_points"], show_alert=True)
+        return
+
+    cursor.execute("""
+        SELECT id, username, password FROM accounts 
+        WHERE category = ? AND id NOT IN (
+            SELECT account_id FROM purchases WHERE account_id IN (SELECT id FROM accounts WHERE category = ?)
+        ) LIMIT 1
+    """, (category, category))
+    account = cursor.fetchone()
+
+    if not account:
+        conn.close()
+        await callback.answer(t["no_accounts"], show_alert=True)
+        return
+
+    acc_id, username, password = account
+
+    try:
+        cursor.execute("BEGIN IMMEDIATE")
+        cursor.execute("UPDATE users SET points = points - ? WHERE user_id = ?", (cost, user_id))
+        cursor.execute("INSERT INTO purchases (user_id, account_id) VALUES (?, ?)", (user_id, acc_id))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        conn.close()
+        await callback.answer("❌ حدث خطأ، حاول مجدداً.", show_alert=True)
+        return
+
+    conn.close()
+
+    text = t["success_redeem"].format(username, password)
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text=t["btn_back"], callback_data="main_menu"))
+    await callback.message.edit_text(text, reply_markup=builder.as_npm if hasattr(builder, 'as_npm') else builder.as_markup())
+    await callback.answer()
+
+async def main():
+    await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    asyncio.run(main())
