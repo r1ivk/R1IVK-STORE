@@ -147,6 +147,8 @@ def get_lang(user_id):
     return row[0] if row else "ar"
 
 async def check_subscription(user_id: int) -> bool:
+    if user_id == ADMIN_ID:
+        return True
     try:
         for channel in REQUIRED_CHANNELS:
             member = await bot.get_chat_member(chat_id=channel, user_id=user_id)
@@ -667,7 +669,7 @@ async def show_purchased_account_details(callback: types.CallbackQuery):
     lang = get_lang(user_id)
     t = texts[lang]
 
-    text = f"🔐 **بيانات الحساب المشرى:**\n\n👤 **المستخدم:** `{username}`\n🔑 **كلمة المرور:** `{password}`"
+    text = f"🔐 **بيانات الحساب المشترى:**\n\n👤 **المستخدم:** `{username}`\n🔑 **كلمة المرور:** `{password}`"
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="⬅️ العودة لحساباتي", callback_data="my_purchases"))
 
@@ -693,7 +695,7 @@ async def redeem_menu(callback: types.CallbackQuery):
     builder.row(InlineKeyboardButton(text="⚽ FC 26 / FIFA 26 (6 pts)", callback_data="redeem_fifa26"))
     builder.row(InlineKeyboardButton(text="🌿 The Last of Us Part I & II (6 pts)", callback_data="redeem_thelastofus"))
     builder.row(InlineKeyboardButton(text="🕷️ Spider-Man: Miles Morales (6 pts)", callback_data="redeem_miles"))
-    builder.row(InlineKeyboardButton(text="🏎️ Forza Horizon 4 (6 pts)", callback_data="redeem_forza"))
+    builder.row(InlineKeyboardButton(text="🏎️ Forza Horizon 4 (6 pts)", callback_data="regex_forza"))
     builder.row(InlineKeyboardButton(text="🏎️ Forza Horizon 5 (6 pts)", callback_data="redeem_forza5"))
     builder.row(InlineKeyboardButton(text="🗡️ Ghost of Tsushima (Gold Edition) (6 pts)", callback_data="redeem_tsushima"))
     builder.row(InlineKeyboardButton(text="🦇 Batman Arkham Trilogy (6 pts)", callback_data="redeem_batman"))
@@ -707,85 +709,6 @@ async def redeem_menu(callback: types.CallbackQuery):
     builder.row(InlineKeyboardButton(text=t["btn_back"], callback_data="main_menu"))
 
     await callback.message.edit_text(t["redeem_title"], reply_markup=builder.as_markup())
-
-@dp.callback_query(F.data.startswith("redeem_"))
-async def process_redemption(callback: types.CallbackQuery):
-    await callback.answer()
-    user_id = callback.from_user.id
-    if not await check_subscription(user_id):
-        return
-
-    category = callback.data.replace("redeem_", "")
-    
-    cost_map = {
-        "spiderman_all": 30,
-        "re4remake": 18,
-        "godofwar": 12,
-        "cyberpunk": 12,
-        "requiem": 10,
-        "rdr2": 6,
-        "fifa26": 6,
-        "thelastofus": 6,
-        "miles": 6,
-        "forza": 6,
-        "forza5": 6,
-        "tsushima": 6,
-        "batman": 6,
-        "naruto": 6,
-        "plague1": 6,
-        "plague2": 6,
-        "gta": 4,
-        "watchdogs": 3,
-        "custom_user": 3,
-        "silenthill": 3
-    }
-
-    cost = cost_map.get(category, 5)
-
-    conn = sqlite3.connect("store_bot.db")
-    cursor = conn.cursor()
-
-    cursor.execute("SELECT points FROM users WHERE user_id = ?", (user_id,))
-    urow = cursor.fetchone()
-    current_points = urow[0] if urow else 0
-
-    lang = get_lang(user_id)
-    t = texts[lang]
-
-    if current_points < cost:
-        conn.close()
-        await callback.answer(t["not_enough_points"], show_alert=True)
-        return
-
-    cursor.execute("SELECT id, username, password FROM accounts WHERE category = ? LIMIT 1", (category,))
-    account = cursor.fetchone()
-
-    if not account:
-        conn.close()
-        await callback.answer(t["no_accounts"], show_alert=True)
-        return
-
-    acc_id, username, password = account
-
-    try:
-        cursor.execute("BEGIN IMMEDIATE")
-        cursor.execute("UPDATE users SET points = points - ? WHERE user_id = ?", (cost, user_id))
-        cursor.execute("INSERT INTO purchases (user_id, account_id) VALUES (?, ?)", (user_id, acc_id))
-        conn.commit()
-    except Exception as e:
-        conn.rollback()
-        conn.close()
-        logging.error(f"Redemption error: {e}")
-        await callback.answer("❌ حدث خطأ ما، يرجى المحاولة لاحقاً.", show_alert=True)
-        return
-
-    conn.close()
-
-    success_text = t["success_redeem"].format(username, password)
-    builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text=t["btn_back"], callback_data="main_menu"))
-
-    await callback.message.edit_text(success_text, reply_markup=builder.as_markup())
 
 async def main():
     await dp.start_polling(bot)
