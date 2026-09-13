@@ -3,8 +3,8 @@ import telebot
 from telebot import types
 
 # ضع التوكن الخاص بك هنا بحذر وتجنب نشره علناً لتفادي تنبيهات الأمان
-TOKEN = "YOUR_BOT_TOKEN_HERE"
-ADMIN_ID = 123456789  # ضع آيدي الحساب الخاص بك كمشرف
+TOKEN = "8852527009:AAGm909nYrGQM-QZW9VlVW9MJV1Zr2kgKa4"
+ADMIN_ID = 8919826699  # ضع آيدي الحساب الخاص بك كمشرف
 
 bot = telebot.TeleBot(TOKEN)
 logging.basicConfig(level=logging.INFO)
