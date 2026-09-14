@@ -147,8 +147,6 @@ def get_lang(user_id):
     return row[0] if row else "ar"
 
 async def check_subscription(user_id: int) -> bool:
-    if user_id == ADMIN_ID:
-        return True
     try:
         for channel in REQUIRED_CHANNELS:
             member = await bot.get_chat_member(chat_id=channel, user_id=user_id)
@@ -326,7 +324,6 @@ async def cmd_start(message: types.Message):
 
     conn.close()
 
-    # فحص الاشتراك الإجباري
     if not await check_subscription(user_id):
         lang = get_lang(user_id)
         t = texts[lang]
@@ -336,7 +333,7 @@ async def cmd_start(message: types.Message):
         await message.answer(t["sub_required"], reply_markup=builder.as_markup(), disable_web_page_preview=True)
         return
 
-    # معالجة منح النقاط للمُحيل عند التأكد من الاشتراك
+    # منح النقاط للمُحيل فور التحقق إن كان مشتركاً وصار نشطاً
     conn = sqlite3.connect("store_bot.db")
     cursor = conn.cursor()
     cursor.execute("SELECT lang, referred_by FROM users WHERE user_id = ?", (user_id,))
@@ -669,7 +666,7 @@ async def show_purchased_account_details(callback: types.CallbackQuery):
     lang = get_lang(user_id)
     t = texts[lang]
 
-    text = f"🔐 **بيانات الحساب المشترى:**\n\n👤 **المستخدم:** `{username}`\n🔑 **كلمة المرور:** `{password}`"
+    text = f"🔐 **بيانات الحساب المشرى:**\n\n👤 **المستخدم:** `{username}`\n🔑 **كلمة المرور:** `{password}`"
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="⬅️ العودة لحساباتي", callback_data="my_purchases"))
 
@@ -695,7 +692,7 @@ async def redeem_menu(callback: types.CallbackQuery):
     builder.row(InlineKeyboardButton(text="⚽ FC 26 / FIFA 26 (6 pts)", callback_data="redeem_fifa26"))
     builder.row(InlineKeyboardButton(text="🌿 The Last of Us Part I & II (6 pts)", callback_data="redeem_thelastofus"))
     builder.row(InlineKeyboardButton(text="🕷️ Spider-Man: Miles Morales (6 pts)", callback_data="redeem_miles"))
-    builder.row(InlineKeyboardButton(text="🏎️ Forza Horizon 4 (6 pts)", callback_data="regex_forza"))
+    builder.row(InlineKeyboardButton(text="🏎️ Forza Horizon 4 (6 pts)", callback_data="redeem_forza"))
     builder.row(InlineKeyboardButton(text="🏎️ Forza Horizon 5 (6 pts)", callback_data="redeem_forza5"))
     builder.row(InlineKeyboardButton(text="🗡️ Ghost of Tsushima (Gold Edition) (6 pts)", callback_data="redeem_tsushima"))
     builder.row(InlineKeyboardButton(text="🦇 Batman Arkham Trilogy (6 pts)", callback_data="redeem_batman"))
@@ -705,12 +702,149 @@ async def redeem_menu(callback: types.CallbackQuery):
     builder.row(InlineKeyboardButton(text="🏎️ GTA V Account (4 pts)", callback_data="redeem_gta"))
     builder.row(InlineKeyboardButton(text="💻 Watch Dogs (3 pts)", callback_data="redeem_watchdogs"))
     builder.row(InlineKeyboardButton(text="🎁 Custom Account (3 pts)", callback_data="redeem_custom_user"))
-    builder.row(InlineKeyboardButton(text="👻 Silent Hill f (3 pts)", callback_data="redeem_silenthill"))
+    builder.row(InlineKeyboardButton(text="🌫️ Silent Hill f Deluxe (8 pts)", callback_data="redeem_silenthill"))
     builder.row(InlineKeyboardButton(text=t["btn_back"], callback_data="main_menu"))
 
     await callback.message.edit_text(t["redeem_title"], reply_markup=builder.as_markup())
 
+@dp.callback_query(F.data.startswith("redeem_"))
+async def process_redeem(callback: types.CallbackQuery):
+    user_id = callback.from_user.id
+    if not await check_subscription(user_id):
+        await callback.answer("⚠️ يجب الاشتراك في القناة أولاً / Subscribe first!", show_alert=True)
+        return
+
+    lang = get_lang(user_id)
+    t = texts[lang]
+    category = callback.data.replace("redeem_", "", 1)
+
+    costs = {
+        "re4remake": 18, "godofwar": 12, "cyberpunk": 12, "requiem": 10,
+        "rdr2": 6, "fifa26": 6, "thelastofus": 6, "spiderman_all": 30,
+        "miles": 6, "forza": 6, "forza5": 6, "tsushima": 6,
+        "batman": 6, "naruto": 6, "plague1": 6, "plague2": 6,
+        "gta": 4, "watchdogs": 3, "custom_user": 3, "silenthill": 8
+    }
+
+    required_points = costs.get(category, 5)
+
+    conn = sqlite3.connect("store_bot.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT points FROM users WHERE user_id = ?", (user_id,))
+    user_row = cursor.fetchone()
+    user_points = user_row[0] if user_row else 0
+
+    if user_points < required_points:
+        conn.close()
+        await callback.answer(t["not_enough_points"], show_alert=True)
+        return
+
+    cursor.execute("""
+        SELECT id, username, password FROM accounts 
+        WHERE category = ? AND id NOT IN (
+            SELECT account_id FROM purchases WHERE user_id = ?
+        ) LIMIT 1
+    """, (category, user_id))
+    acc = cursor.fetchone()
+
+    if not acc:
+        cursor.execute("SELECT id, username, password FROM accounts WHERE category = ? LIMIT 1", (category,))
+        acc = cursor.fetchone()
+
+    if not acc:
+        conn.close()
+        await callback.answer(t["no_accounts"], show_alert=True)
+        return
+
+    acc_id, username, password = acc
+
+    try:
+        cursor.execute("BEGIN IMMEDIATE")
+        cursor.execute("UPDATE users SET points = points - ? WHERE user_id = ?", (required_points, user_id))
+        cursor.execute("INSERT INTO purchases (user_id, account_id) VALUES (?, ?)", (user_id, acc_id))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        conn.close()
+        await callback.answer("⚠️ حدث خطأ أثناء إتمام العملية، حاول مجدداً.", show_alert=True)
+        return
+    finally:
+        conn.close()
+
+    success_text = t["success_redeem"].format(username, password)
+    builder = InlineKeyboardBuilder()
+    builder.row(InlineKeyboardButton(text=t["btn_back"], callback_data="main_menu"))
+    await callback.message.edit_text(success_text, reply_markup=builder.as_markup())
+
+# --- نظام تحويل رسائل المستخدمين للمشرف والرد عليها ---
+@dp.callback_query(F.data.startswith("reply_user_"))
+async def admin_start_reply(callback: types.CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        return
+    target_user_id = int(callback.data.split("_")[2])
+    
+    conn = sqlite3.connect("store_bot.db")
+    cursor = conn.cursor()
+    cursor.execute("INSERT OR REPLACE INTO admin_chat (admin_id, active_target_user_id) VALUES (?, ?)", (ADMIN_ID, target_user_id))
+    conn.commit()
+    conn.close()
+
+    await callback.answer()
+    await callback.message.answer(f"✍️ أرسل ردك الآن للمستخدم (آيدي: `{target_user_id}`):\n(أو اكتب `/end` لإنهاء وضع الدردشة)")
+
+@dp.message(F.chat.type == "private")
+async def handle_user_or_admin_messages(message: types.Message):
+    user_id = message.from_user.id
+
+    # إذا كان المرسل هو المشرف ويقوم بالرد على مستخدم
+    if user_id == ADMIN_ID:
+        if message.text and message.text.startswith("/"):
+            return  # تجاهل الأوامر الأخرى
+
+        conn = sqlite3.connect("store_bot.db")
+        cursor = conn.cursor()
+        cursor.execute("SELECT active_target_user_id FROM admin_chat WHERE admin_id = ?", (ADMIN_ID,))
+        row = cursor.fetchone()
+        conn.close()
+
+        if row and row[0]:
+            target_user_id = row[0]
+            try:
+                await bot.send_message(chat_id=target_user_id, text=f"💬 **رد المدير:**\n{message.text}")
+                await message.answer("✅ تم إرسال الرد للمستخدم بنجاح.")
+            except Exception as e:
+                await message.answer(f"❌ فشل إرسال الرد: {e}")
+        return
+
+    # إذا كان المستخدم العادي يرسل رسالة استفسار للبوت
+    if not await check_subscription(user_id):
+        return
+
+    user_name = message.from_user.full_name
+    username = f"@{message.from_user.username}" if message.from_user.username else "لا يوجد"
+    
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(text="💬 مراسلة المستخدم", callback_data=f"reply_user_{user_id}"),
+        InlineKeyboardButton(text="👤 فتح بروفايل المستخدم", url=f"tg://user?id={user_id}")
+    )
+
+    admin_msg = (
+        f"📩 **رسالة جديدة من مستخدم:**\n\n"
+        f"👤 الاسم: {user_name}\n"
+        f"🏷️ المعرف: {username}\n"
+        f"🆔 الآيدي: `{user_id}`\n\n"
+        f"💬 النص المرسل:\n{message.text or '[محتوى غير نصي]'}"
+    )
+
+    try:
+        await bot.send_message(chat_id=ADMIN_ID, text=admin_msg, reply_markup=builder.as_markup())
+        await message.answer("✅ تم إرسال رسالتك إلى الإدارة بنجاح، سيتم الرد عليك قريباً.")
+    except Exception as e:
+        logging.error(f"Failed to forward message to admin: {e}")
+
 async def main():
+    await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
